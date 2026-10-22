@@ -109,6 +109,17 @@ The suite includes rubric and feature checks, ingestion and download tests, LLM 
 
 Run `python calibrate.py samples --model small --frames` to re-analyse every labeled recording, perform leave-one-recording-out (LOO) validation, print exact and within-one-level accuracy, a four-level confusion matrix, pairwise ranking concordance, fitted cutoffs/weights, and signal monotonicity. The script stores fresh feature results in `.cache/` and writes LOO predictions to `calibration.csv`. Add `--write-config` to persist full-dataset fitted cutoffs and weights after reviewing the report. The `quality issue` folder is mapped to Average per the dataset labeling instruction. The available labeled recordings still contain no Poor example; the Poor level and its adjacent cutoff therefore remain untested. Small, imbalanced samples still cannot establish general accuracy.
 
+Latest cached run (2026-10-22; Whisper `small`, without frame sampling): seven recordings (3 Average, 2 Good, 2 Excellent) produced **42.9% exact accuracy**, **71.4% within-one-level accuracy**, and **75.0% pairwise ranking concordance** across 16 differently labeled pairs. Confusion matrix (true rows, predicted columns):
+
+| True \ Predicted | Poor | Average | Good | Excellent |
+| --- | ---: | ---: | ---: | ---: |
+| Poor | 0 | 0 | 0 | 0 |
+| Average | 0 | 2 | 0 | 1 |
+| Good | 0 | 2 | 0 | 0 |
+| Excellent | 0 | 1 | 0 | 1 |
+
+The full-data diagnostic fit returned cutoffs Poor `2.60`, Average `3.471`, and Good `3.471`; the equal Average/Good cutoffs do not establish a useful Good band, and these fitted values were **not** written to `config.json`. Student-word counts were zero in all seven cached analyses, so this run does not validate student-participation signals. Interpret all results cautiously: the dataset is small and imbalanced, contains no Poor example, and has a known speaker-assignment limitation.
+
 Speaker embeddings and pitch cues improve turn assignment but can still fail with overlapping speech, several similar children, or short turns; inspect the diarization confidence before interpreting participation. Whisper uses word timestamps, reduces background noise before transcription, and pins a detected language when its confidence is high. Low-confidence text contributes less to lexical measurements and is marked in the transcript. Questions can also be estimated from rising pitch; optional LLM tags can recognize praise/questions across languages when an approved backend is selected. Silence and wait time use audio activity, not just ASR boundaries.
 
 Frame OCR requires both the `pytesseract` Python package and a local Tesseract executable on `PATH`. Install them locally to enable text-density and text-change measurements. Screen signals have deliberately low rubric weight until calibration demonstrates that they separate quality levels. Frame sampling and OCR stay local; do not send images containing children to external services.
