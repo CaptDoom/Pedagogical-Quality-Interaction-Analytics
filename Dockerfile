@@ -6,14 +6,30 @@ ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/home/classlens/.cache/huggingface
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr libgl1 libglib2.0-0 libgomp1 \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        pkg-config \
+        ffmpeg \
+        libavformat-dev \
+        libavcodec-dev \
+        libavdevice-dev \
+        libavutil-dev \
+        libswscale-dev \
+        libswresample-dev \
+        libavfilter-dev \
+        tesseract-ocr \
+        libgl1 \
+        libglib2.0-0 \
+        libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip \
-    && python -m pip install -r requirements.txt
+    && python -m pip install -r requirements.txt \
+    && python -c "import av; print(f'PyAV {av.__version__} installed')" \
+    && ffmpeg -version
 
 COPY assessor ./assessor
 COPY web ./web
