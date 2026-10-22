@@ -3,20 +3,11 @@
 <head>
 <meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>ClassLens - Pedagogical Quality Assessor</title>
+<link rel="icon" href="/favicon.ico"/>
+<link rel="stylesheet" href="/static/styles.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
-<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-<script>
-tailwind.config = { darkMode: "class", theme: { extend: {
-  colors: { outline: "#89929b", "outline-variant": "#3f4850", surface: "#031427", "surface-container-lowest": "#000f21",
-    "surface-container-low": "#0b1c30", "surface-container": "#102034", "surface-container-high": "#1b2b3f",
-    primary: "#93ccff", "on-primary": "#003351", secondary: "#6bd8cb", "secondary-container": "#0f766e",
-    "on-secondary-container": "#ccfbf1", tertiary: "#ffb77d", error: "#ffb4ab", "error-container": "#93000a",
-    "on-error-container": "#ffdad6", background: "#031427", "on-surface": "#d3e4fe", "on-surface-variant": "#bfc7d2" },
-  fontFamily: { headline: ["Space Grotesk", "sans-serif"], body: ["Manrope", "sans-serif"], label: ["JetBrains Mono", "monospace"] }
-}}};
-</script>
 <style>
   .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20; vertical-align: middle; }
   ::-webkit-scrollbar { width: 5px; height: 5px; } ::-webkit-scrollbar-track { background: #0b1c30; } ::-webkit-scrollbar-thumb { background: #3f4850; border-radius: 3px; }
@@ -179,8 +170,8 @@ tailwind.config = { darkMode: "class", theme: { extend: {
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 text-xs">
         <div class="font-bold text-on-surface border-b border-outline-variant pb-2">Pipeline Settings</div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label class="block font-semibold mb-1">Whisper Speech Model</label><select id="cfgModel" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="medium" selected>Medium (Recommended: More accurate, slower)</option><option value="base">Base (Faster)</option><option value="small">Small (Balanced)</option><option value="tiny">Tiny (Fastest)</option></select></div>
-          <div><label class="block font-semibold mb-1">Max Duration (Minutes)</label><input id="cfgMaxMinutes" type="number" value="60" min="5" max="120" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"/></div>
+          <div><label class="block font-semibold mb-1">Whisper Speech Model</label><select id="cfgModel" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="small" selected>Small (Recommended: Balanced)</option><option value="base">Base (Faster)</option><option value="medium">Medium (More accurate, slower)</option><option value="tiny">Tiny (Fastest)</option></select></div>
+          <div><label class="block font-semibold mb-1">Max Duration (Minutes)</label><input id="cfgMaxMinutes" type="number" value="30" min="5" max="120" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"/></div>
           <div class="sm:col-span-2"><label class="flex items-center gap-2 cursor-pointer"><input id="cfgFrames" type="checkbox" checked class="rounded border-outline text-primary focus:ring-primary"/><span>Extract visual frames for slide transitions & screen change detection</span></label></div>
           <div><label class="block font-semibold mb-1">AI Review Engine</label><select id="cfgLlm" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="gemini" selected>Google Gemini (Recommended)</option><option value="openai-compatible">OpenAI (gpt-4o-mini)</option><option value="ollama">Local Ollama</option><option value="none">None (Deterministic only)</option></select></div>
           <div><label class="block font-semibold mb-1">API Key (Optional override)</label><input id="cfgApiKey" type="password" placeholder="Gemini or OpenAI key" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs font-label text-on-surface focus:border-primary"/></div>
@@ -305,7 +296,7 @@ async function startAnalysis() {
   if (stagedSample) fd.append('sample', stagedSample.relPath);
   fd.append('whisper_model', document.getElementById('cfgModel').value);
   fd.append('use_frames', document.getElementById('cfgFrames').checked ? 'true' : 'false');
-  fd.append('max_minutes', document.getElementById('cfgMaxMinutes').value || '60');
+  fd.append('max_minutes', document.getElementById('cfgMaxMinutes').value || '30');
   fd.append('llm_backend', document.getElementById('cfgLlm').value);
   const uk = document.getElementById('cfgApiKey').value.trim();
   if (uk) fd.append('api_key', uk);
@@ -332,13 +323,16 @@ function pollJob(jid) {
   pollTimer = setInterval(async () => {
     try {
       const res = await fetch('/jobs/' + jid, { headers: appPasswordHeaders() });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.detail || `HTTP ${res.status}`);
+      }
       const job = await res.json();
       const logs = document.getElementById('modalLiveLogs');
-      if (job.messages && job.messages.length) {
-        logs.innerHTML = job.messages.map(m => `<div>▸ ${esc(m)}</div>`).join('');
-        logs.scrollTop = logs.scrollHeight;
-      }
+      logs.innerHTML = (job.messages && job.messages.length
+        ? job.messages
+        : [`Assessment ${job.status}...`]).map(m => `<div>▸ ${esc(m)}</div>`).join('');
+      logs.scrollTop = logs.scrollHeight;
       if (job.status === 'done') {
         clearInterval(pollTimer); document.getElementById('modalProgressWrap').classList.add('hidden');
         document.getElementById('btnStartAnalysis').disabled = false; document.getElementById('startBtnLabel').textContent = "Start Assessment";
@@ -348,7 +342,15 @@ function pollJob(jid) {
         document.getElementById('btnStartAnalysis').disabled = false; document.getElementById('startBtnLabel').textContent = "Start Assessment";
         const errWrap = document.getElementById('modalErrorWrap'); errWrap.textContent = job.error || "Assessment failed."; errWrap.classList.remove('hidden');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      clearInterval(pollTimer);
+      document.getElementById('modalProgressWrap').classList.add('hidden');
+      document.getElementById('btnStartAnalysis').disabled = false;
+      document.getElementById('startBtnLabel').textContent = "Start Assessment";
+      const errWrap = document.getElementById('modalErrorWrap');
+      errWrap.textContent = `Could not retrieve assessment status: ${e.message}`;
+      errWrap.classList.remove('hidden');
+    }
   }, 1000);
 }
 function renderDashboard(r) {

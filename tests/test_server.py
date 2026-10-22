@@ -14,7 +14,9 @@ def test_read_routes_respond(monkeypatch):
     assert client.get("/").status_code == 200
     assert client.get("/health").json()["status"] == "ok"
     assert client.get("/api/health").json()["app"] == "ClassLens"
-    assert client.get("/api/config").json() == {"whisper_model": "medium", "llm_backend": "gemini"}
+    assert client.get("/api/config").json() == {"whisper_model": "small", "llm_backend": "gemini"}
+    assert client.get("/static/styles.css").status_code == 200
+    assert client.get("/favicon.ico").status_code == 204
     samples = client.get("/api/samples").json()
     assert isinstance(samples, list)
     assert all({"name", "rel_path", "size_mb", "ext"} <= sample.keys() for sample in samples)
@@ -68,9 +70,13 @@ def test_report_routes_enforce_configured_password(monkeypatch):
 
 def test_assessment_job_lifecycle(monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
-    monkeypatch.setattr(server, "analyze", lambda *args, **kwargs: {
-        "label": "Good", "score": 3.8, "features": {}, "dimensions": [], "observations": []
-    })
+    analysis_args = []
+
+    def fake_analyze(*args, **kwargs):
+        analysis_args.extend(args)
+        return {"label": "Good", "score": 3.8, "features": {}, "dimensions": [], "observations": []}
+
+    monkeypatch.setattr(server, "analyze", fake_analyze)
     response = client.post(
         "/assess", data={"llm_backend": "none"}, files={"file": ("lesson.wav", b"test-audio", "audio/wav")}
     )
@@ -85,5 +91,7 @@ def test_assessment_job_lifecycle(monkeypatch):
         time.sleep(0.01)
 
     assert job["status"] == "done", job
+    assert analysis_args[1] == "small"
+    assert analysis_args[4] == 30
     assert job["report"]["file_name"] == "lesson.wav"
     assert client.get("/api/latest").json()["label"] == "Good"

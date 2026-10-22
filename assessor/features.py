@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from functools import lru_cache
+from typing import Callable
 
 import numpy as np
 
@@ -90,7 +91,8 @@ def _speaker_encoder():
     )
 
 
-def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int):
+def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int,
+                    progress: Callable[[str], None] | None = None):
     """Cluster local ECAPA speaker embeddings; the longest-speaking cluster is the teacher."""
     info = {"method": "ecapa", "confident": False, "silhouette": None, "speakers": 1}
     for s in segments:
@@ -106,6 +108,8 @@ def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int):
         from sklearn.cluster import AgglomerativeClustering
         from sklearn.metrics import silhouette_score
 
+        if progress:
+            progress("Loading local ECAPA speaker model; first use may download model weights")
         clips: list[tuple[int, np.ndarray, float, float]] = []
         encoder = _speaker_encoder()
         for index, s in enumerate(segments):
@@ -120,6 +124,8 @@ def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int):
         valid: list[tuple[int, np.ndarray, float, float]] = []
         for offset in range(0, len(clips), 16):
             batch = clips[offset:offset + 16]
+            if progress:
+                progress(f"Creating speaker embeddings: {min(offset + len(batch), len(clips))}/{len(clips)}")
             max_length = max(len(clip) for _, clip, _, _ in batch)
             waveforms = np.zeros((len(batch), max_length), dtype=np.float32)
             lengths = np.empty(len(batch), dtype=np.float32)

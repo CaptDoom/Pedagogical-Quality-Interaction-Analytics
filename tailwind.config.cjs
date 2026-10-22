@@ -1,0 +1,35 @@
+module.exports = {
+  content: ["./web/index.html"],
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        outline: "#89929b",
+        "outline-variant": "#3f4850",
+        surface: "#031427",
+        "surface-container-lowest": "#000f21",
+        "surface-container-low": "#0b1c30",
+        "surface-container": "#102034",
+        "surface-container-high": "#1b2b3f",
+        primary: "#93ccff",
+        "on-primary": "#003351",
+        secondary: "#6bd8cb",
+        "secondary-container": "#0f766e",
+        "on-secondary-container": "#ccfbf1",
+        tertiary: "#ffb77d",
+        error: "#ffb4ab",
+        "error-container": "#93000a",
+        "on-error-container": "#ffdad6",
+        background: "#031427",
+        "on-surface": "#d3e4fe",
+        "on-surface-variant": "#bfc7d2",
+      },
+      fontFamily: {
+        headline: ["Space Grotesk", "sans-serif"],
+        body: ["Manrope", "sans-serif"],
+        label: ["JetBrains Mono", "monospace"],
+      },
+    },
+  },
+  plugins: [require("@tailwindcss/forms")],
+};

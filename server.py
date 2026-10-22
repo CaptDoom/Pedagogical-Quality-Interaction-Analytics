@@ -32,9 +32,10 @@ app = FastAPI(title="ClassLens", docs_url="/api")
 
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_PAGE = ROOT_DIR / "web" / "index.html"
+WEB_DIR = ROOT_DIR / "web"
 WHISPER_MODELS = {"tiny", "base", "small", "medium"}
 LLM_BACKENDS = {"none", "gemini", "google", "openai-compatible", "ollama", "anthropic"}
-DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
+DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
 DEFAULT_LLM_BACKEND = os.environ.get("DEFAULT_LLM_BACKEND", "gemini")
 if DEFAULT_WHISPER_MODEL not in WHISPER_MODELS:
     raise RuntimeError(f"Unsupported WHISPER_MODEL {DEFAULT_WHISPER_MODEL!r}.")
@@ -109,6 +110,16 @@ def index():
     return FileResponse(WEB_PAGE, media_type="text/html")
 
 
+@app.get("/static/styles.css")
+def styles():
+    return FileResponse(WEB_DIR / "styles.css", media_type="text/css")
+
+
+@app.get("/favicon.ico", status_code=204)
+def favicon():
+    return None
+
+
 @app.get("/api/samples")
 def list_samples():
     """List available local classroom recordings."""
@@ -159,7 +170,7 @@ async def assess(
     sample: str = Form(""),
     whisper_model: str = Form(DEFAULT_WHISPER_MODEL),
     use_frames: str = Form("true"),
-    max_minutes: int = Form(60, ge=1, le=120),
+    max_minutes: int = Form(30, ge=1, le=120),
     llm_backend: str = Form(DEFAULT_LLM_BACKEND),
     api_key: str = Form(""),
     token: str = Form(""),
@@ -203,7 +214,7 @@ async def assess(
     else:
         source = url
 
-    job = {"status": "queued", "messages": [], "report": None, "error": None}
+    job = {"status": "queued", "messages": ["Assessment queued"], "report": None, "error": None}
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = job
     threading.Thread(target=_run, args=(job, source, saved, whisper_model, use_frames == "true",

@@ -176,3 +176,61 @@ def test_transcribe_pins_stable_language_and_splits_word_pauses(monkeypatch):
     assert [segment.text for segment in segments] == ["Hello there", "friend"]
     assert segments[0].confidence == pytest.approx(0.85)
     assert segments[1].confidence == pytest.approx(0.7)
+
+
+def test_transcribe_retries_cuda_failure_on_cpu(monkeypatch):
+    from types import SimpleNamespace
+
+    class FakeModel:
+        def __init__(self, device):
+            self.device = device
+
+        def transcribe(self, audio, language=None, **kwargs):
+            info = SimpleNamespace(language="en", language_probability=0.95, duration=3.0)
+
+            def segments():
+                if self.device == "cuda":
+                    raise RuntimeError("CUDA driver unavailable")
+                word = SimpleNamespace(start=0.0, end=0.5, word=" Hello", probability=0.9)
+                yield SimpleNamespace(start=0.0, end=0.5, text=" Hello", words=[word])
+
+            return segments(), info
+
+    monkeypatch.setattr("assessor.transcribe.get_optimal_device", lambda: ("cuda", "float16"))
+
+    def fake_model(size, device, compute):
+        return FakeModel(device)
+
+    fake_model.cache_clear = lambda: None
+    monkeypatch.setattr("assessor.transcribe._model", fake_model)
+    updates = []
+
+    segments, language = transcribe(
+        np.zeros(3 * SR, dtype=np.float32), "tiny", progress=updates.append
+    )
+
+    assert language == "en"
+    assert [segment.text for segment in segments] == ["Hello"]
+    assert any("retrying the full transcription on CPU" in message for message in updates)
+
+
+def test_pipeline_rejects_recordings_without_detected_speech(tmp_path, monkeypatch):
+    monkeypatch.setattr(pl, "has_ffmpeg", lambda: True)
+    src = tmp_path / "silent.mp4"
+    src.write_bytes(b"test media")
+
+    def fake_extract(path, dst, max_minutes=None, denoised_dst=None):
+        import soundfile as sf
+
+        silence = np.zeros(3 * SR, dtype=np.float32)
+        sf.write(dst, silence, SR)
+        if denoised_dst:
+            sf.write(denoised_dst, silence, SR)
+
+    monkeypatch.setattr(pl, "extract_audio", fake_extract)
+    monkeypatch.setattr(pl, "ingest", lambda path, outdir: (
+        path, {"duration": 3.0, "has_audio": True, "has_video": False, "format": "test"}))
+    monkeypatch.setattr(pl, "transcribe", lambda *args, **kwargs: ([], "en"))
+
+    with pytest.raises(RuntimeError, match="No speech was detected"):
+        pl.analyze(str(src), "tiny", False, "none")

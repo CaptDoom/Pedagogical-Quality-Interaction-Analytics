@@ -44,16 +44,23 @@ def analyze(path: str, whisper_model: str = "medium", use_frames: bool = True, l
         say("Transcribing locally")
         segs, lang = transcribe(clean_y, whisper_model, device, progress=say)
         gc.collect()
+        if not segs:
+            raise RuntimeError(
+                "No speech was detected in the selected audio. Check that it contains audible speech, "
+                "increase the analysis duration, or try another Whisper model."
+            )
 
         say("Separating teacher and student voices")
-        segs, dia = assign_speakers(segs, clean_y, sr)
+        segs, dia = assign_speakers(segs, clean_y, sr, progress=say)
+        if dia.get("error"):
+            notes.append("Speaker separation was unavailable; participation estimates may be unreliable.")
 
         frames, step = ([], 10.0)
         if use_frames and info.get("has_video", False):
             say("Sampling screen frames")
             frames, step = sample_frames(path, 10.0, 150, max_minutes * 60)
 
-        say("Measuring interaction, delivery and screen signals")
+        say("Measuring speech activity, interaction, delivery and screen signals")
         feats = compute_features(segs, y, sr, frames, step, dia["confident"], vad_audio=clean_y)
 
         llm_out = None
