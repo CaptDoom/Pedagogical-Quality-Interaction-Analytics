@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html class="h-full dark" lang="en">
+<head>
+<meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ClassLens - Pedagogical Quality Assessor</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<script>
+tailwind.config = { darkMode: "class", theme: { extend: {
+  colors: { outline: "#89929b", "outline-variant": "#3f4850", surface: "#031427", "surface-container-lowest": "#000f21",
+    "surface-container-low": "#0b1c30", "surface-container": "#102034", "surface-container-high": "#1b2b3f",
+    primary: "#93ccff", "on-primary": "#003351", secondary: "#6bd8cb", "secondary-container": "#0f766e",
+    "on-secondary-container": "#ccfbf1", tertiary: "#ffb77d", error: "#ffb4ab", "error-container": "#93000a",
+    "on-error-container": "#ffdad6", background: "#031427", "on-surface": "#d3e4fe", "on-surface-variant": "#bfc7d2" },
+  fontFamily: { headline: ["Space Grotesk", "sans-serif"], body: ["Manrope", "sans-serif"], label: ["JetBrains Mono", "monospace"] }
+}}};
+</script>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'opsz' 20; vertical-align: middle; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; } ::-webkit-scrollbar-track { background: #0b1c30; } ::-webkit-scrollbar-thumb { background: #3f4850; border-radius: 3px; }
+  .playing-turn { border-color: #93ccff !important; background: rgba(147, 204, 255, 0.12) !important; box-shadow: 0 0 12px rgba(147, 204, 255, 0.25); }
+  @media print {
+    #topbar, #ingestModal, #playerCard, .no-print { display: none !important; }
+    body, main { background: #fff !important; color: #111 !important; overflow: visible !important; height: auto !important; }
+    .bg-surface-container-lowest, .bg-surface-container-low, .bg-surface { background: #fff !important; border-color: #ccc !important; color: #111 !important; }
+    .text-on-surface, .text-on-surface-variant { color: #111 !important; } .text-outline { color: #555 !important; } #printHeader { display: block !important; }
+  }
+</style>
+</head>
+<body class="bg-background text-on-surface h-full font-body overflow-hidden flex flex-col select-text">
+<div id="toast" class="fixed top-4 right-4 z-50 transform transition-all duration-300 translate-y-[-100px] opacity-0 px-4 py-2.5 rounded-lg bg-surface-container-high border border-primary text-xs font-semibold text-primary shadow-xl flex items-center gap-2">
+  <span class="material-symbols-outlined text-base">check_circle</span><span id="toastMsg">Action complete</span>
+</div>
+<header id="topbar" class="flex justify-between items-center w-full px-6 py-3 border-b border-outline-variant bg-surface-container-lowest shrink-0 z-30">
+  <div class="flex items-center gap-3 cursor-pointer" onclick="openIngestModal()">
+    <div class="w-8 h-8 rounded bg-primary/20 text-primary flex items-center justify-center font-bold"><span class="material-symbols-outlined text-xl">school</span></div>
+    <div>
+      <div class="flex items-center gap-2"><span class="text-lg font-headline font-bold text-primary tracking-tight">ClassLens</span><span class="px-2 py-0.2 rounded text-[10px] font-label bg-surface-container text-secondary border border-outline-variant">AI Assessor</span></div>
+      <p class="text-[11px] text-outline leading-none hidden sm:block">Objective Classroom Pedagogical Quality & Interaction Analytics</p>
+    </div>
+  </div>
+  <div class="flex items-center gap-2.5">
+    <button onclick="copyFullReport()" class="px-3 py-1.5 rounded border border-outline-variant hover:border-primary text-on-surface hover:text-primary transition-colors text-xs font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-base">content_copy</span><span>Copy Summary</span></button>
+    <button onclick="window.print()" class="px-3 py-1.5 rounded border border-outline-variant hover:border-primary text-on-surface hover:text-primary transition-colors text-xs font-semibold flex items-center gap-1.5"><span class="material-symbols-outlined text-base">print</span><span>Export PDF</span></button>
+    <button onclick="openIngestModal()" class="px-4 py-1.5 rounded bg-primary text-on-primary hover:bg-opacity-90 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95"><span class="material-symbols-outlined text-base">upload_file</span><span>New Assessment</span></button>
+  </div>
+</header>
+<div id="printHeader" class="hidden p-6 border-b border-gray-300">
+  <h1 class="text-2xl font-bold text-black">ClassLens: Pedagogical Quality Assessment Report</h1>
+  <p class="text-sm text-gray-600">Automated Speech & Video Classroom Quality Evaluation • Generated <span id="printDate"></span></p>
+</div>
+<main class="flex-1 overflow-y-auto bg-surface p-6" id="mainContainer">
+  <div id="emptyState" class="max-w-4xl mx-auto py-10 space-y-8">
+    <div class="text-center space-y-3">
+      <div class="inline-flex p-4 rounded-2xl bg-surface-container-low border border-outline-variant text-primary shadow-xl"><span class="material-symbols-outlined text-4xl">analytics</span></div>
+      <h1 class="text-3xl font-headline font-bold text-on-surface">Classroom Pedagogical Assessor</h1>
+      <p class="text-sm text-outline max-w-xl mx-auto leading-relaxed">Analyze classroom recordings for teacher-student engagement, wait times, inquiry depth, pace, feedback, and instructional accuracy.</p>
+      <div class="pt-2"><button onclick="openIngestModal()" class="px-6 py-2.5 bg-primary text-on-primary font-headline font-bold text-sm rounded-lg hover:bg-opacity-90 shadow-md inline-flex items-center gap-2 active:scale-95 transition-all"><span class="material-symbols-outlined">add_circle</span><span>Assess Classroom Recording</span></button></div>
+    </div>
+    <div class="space-y-3 pt-6 border-t border-outline-variant/60">
+      <div class="flex items-center justify-between pb-1"><h2 class="text-xs font-headline font-bold uppercase tracking-wider text-outline flex items-center gap-1.5"><span class="material-symbols-outlined text-primary text-base">play_lesson</span>Preloaded Benchmark Recordings</h2><span class="text-xs text-outline font-label">Instant 1-click assessment</span></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="benchmarkCardsContainer"></div>
+    </div>
+  </div>
+  <div id="dashboardView" class="hidden space-y-6 max-w-7xl mx-auto pb-12">
+    <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm">
+      <div class="flex items-center flex-wrap gap-2.5">
+        <span id="sessionFileName" class="font-headline text-base font-bold text-on-surface truncate max-w-md">session.mp4</span>
+        <span id="sessionDuration" class="px-2 py-0.5 rounded bg-surface-container-high font-label text-xs text-primary font-semibold border border-outline-variant">-- min</span>
+        <span id="sessionLanguage" class="px-2 py-0.5 rounded bg-surface-container-low font-label text-xs text-on-surface-variant border border-outline-variant">Lang: en</span>
+        <span id="sessionDiarization" class="px-2 py-0.5 rounded bg-surface-container-low font-label text-xs text-secondary border border-outline-variant">Diarization Active</span>
+      </div>
+      <button onclick="openIngestModal()" class="px-3 py-1 bg-surface-container-high hover:bg-surface-container text-primary border border-outline-variant rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"><span class="material-symbols-outlined text-sm">refresh</span><span>Re-assess</span></button>
+    </section>
+    <section id="playerCard" class="hidden bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-2">
+      <div class="flex items-center justify-between text-xs font-semibold text-on-surface"><span class="flex items-center gap-1.5 text-primary"><span class="material-symbols-outlined text-base">smart_display</span>Synchronized Playback (Click timestamps to seek)</span><span id="playbackTime" class="font-label text-outline text-[11px]">00:00 / 00:00</span></div>
+      <video id="mediaPlayer" controls class="w-full max-h-72 bg-black rounded-lg"></video>
+    </section>
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant rounded-xl p-5 flex flex-col justify-between shadow-sm">
+        <div>
+          <span class="font-label text-xs uppercase tracking-wider text-outline">Overall Pedagogical Index</span>
+          <div class="flex items-baseline gap-3 mt-1.5"><span id="heroScore" class="font-headline text-4xl font-bold text-on-surface">--</span><span class="font-label text-sm text-outline">/ 5.00</span><span id="heroBadge" class="px-3 py-1 rounded font-label text-xs font-bold border">--</span></div>
+          <div class="mt-2 text-xs text-on-surface-variant">Confidence Rating: <strong id="heroConfidence" class="text-on-surface font-semibold">--</strong></div>
+        </div>
+        <div class="mt-4 pt-3 border-t border-outline-variant space-y-1.5">
+          <div class="w-full h-2 rounded bg-surface-container overflow-hidden flex"><div class="bg-error/50" style="width:25%"></div><div class="bg-[#d97707]/50" style="width:25%"></div><div class="bg-primary/50" style="width:25%"></div><div class="bg-secondary/50" style="width:25%"></div></div>
+          <div class="flex justify-between text-[10px] font-label text-outline"><span>Poor (&lt;2.6)</span><span>Avg (2.6–3.4)</span><span>Good (3.4–3.75)</span><span>Exc (&ge;3.75)</span></div>
+        </div>
+        <div id="aiSummaryBox" class="mt-4 p-3 rounded bg-surface-container-low border border-outline-variant/60 text-xs text-on-surface-variant leading-relaxed"></div>
+      </div>
+      <div class="lg:col-span-7 grid grid-cols-2 gap-3">
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col justify-between">
+          <div><div class="flex justify-between items-start"><span class="font-semibold text-xs text-outline">Student Talk Share</span><span class="material-symbols-outlined text-secondary text-base">record_voice_over</span></div><div id="metricStudentTalk" class="font-label text-2xl font-bold text-on-surface mt-2">--%</div></div>
+          <div class="mt-3"><div class="w-full bg-surface-container h-1.5 rounded overflow-hidden"><div id="barStudentTalk" class="bg-secondary h-full" style="width:0%"></div></div><span class="font-label text-[11px] text-outline mt-1 inline-block">Target: 22% – 60%</span></div>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col justify-between">
+          <div><div class="flex justify-between items-start"><span class="font-semibold text-xs text-outline">Teacher Questions</span><span class="material-symbols-outlined text-primary text-base">contact_support</span></div><div id="metricQuestions" class="font-label text-2xl font-bold text-on-surface mt-2">--</div></div>
+          <div class="mt-3"><span id="subQuestions" class="font-label text-[11px] text-primary inline-block">-- / min</span></div>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col justify-between">
+          <div><div class="flex justify-between items-start"><span class="font-semibold text-xs text-outline">Max Teacher Monologue</span><span class="material-symbols-outlined text-tertiary text-base">timer</span></div><div id="metricMonologue" class="font-label text-2xl font-bold text-on-surface mt-2">--s</div></div>
+          <div class="mt-3"><span id="subMonologue" class="font-label text-[11px] text-outline inline-block">Pace: -- wpm</span></div>
+        </div>
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col justify-between">
+          <div><div class="flex justify-between items-start"><span class="font-semibold text-xs text-outline">Positive Feedback Rate</span><span class="material-symbols-outlined text-secondary text-base">sentiment_very_satisfied</span></div><div id="metricPraise" class="font-label text-2xl font-bold text-secondary mt-2">--/m</div></div>
+          <div class="mt-3"><span id="subDeadAir" class="font-label text-[11px] text-outline inline-block">Dead air: --%</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-lg">check_circle</span><span class="font-bold text-sm">Key Strengths & High-Yield Beats</span></div><span id="strengthsBadge" class="px-2 py-0.5 rounded bg-secondary-container/30 text-on-secondary-container font-label text-xs font-semibold">0</span></div>
+        <div id="strengthsList" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+      </div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant"><div class="flex items-center gap-1.5 text-error"><span class="material-symbols-outlined text-lg">warning</span><span class="font-bold text-sm">Instructional Concerns & Growth Areas</span></div><span id="concernsBadge" class="px-2 py-0.5 rounded bg-error-container/30 text-on-error-container font-label text-xs font-semibold">0</span></div>
+        <div id="concernsList" class="space-y-2 max-h-80 overflow-y-auto pr-1"></div>
+      </div>
+    </section>
+    <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 space-y-3">
+      <div class="flex items-center justify-between border-b border-outline-variant pb-2"><h3 class="font-headline text-base font-bold text-on-surface">Calibrated Dimension Breakdown</h3><span class="text-xs text-outline font-label">Weighted Pedagogical Rubric</span></div>
+      <div id="dimensionBarsList" class="space-y-2.5"></div>
+    </section>
+    <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 space-y-3">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline-variant pb-3">
+        <div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary">subtitles</span><h3 class="font-headline text-base font-bold text-on-surface">Synchronized Transcript</h3><span id="transcriptCountBadge" class="px-2 py-0.5 rounded bg-surface-container font-label text-xs text-primary border border-outline-variant">0 turns</span></div>
+        <div class="flex items-center gap-2.5">
+          <input id="transcriptSearch" oninput="filterTranscript()" class="bg-surface border border-outline-variant rounded py-1 px-3 text-xs text-on-surface placeholder:text-outline focus:border-primary" placeholder="Search transcript text..."/>
+          <select id="speakerFilter" onchange="filterTranscript()" class="bg-surface border border-outline-variant rounded py-1 px-2.5 text-xs text-on-surface focus:border-primary"><option value="all">All Speakers</option><option value="teacher">Teacher Only</option><option value="student">Student Only</option></select>
+          <button onclick="copyTranscriptText()" class="p-1 text-outline hover:text-primary rounded border border-outline-variant" title="Copy Transcript"><span class="material-symbols-outlined text-base">copy_all</span></button>
+        </div>
+      </div>
+      <div id="transcriptBox" class="max-h-80 overflow-y-auto space-y-1.5 pr-1 text-xs"></div>
+    </section>
+    <section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-5 space-y-3">
+      <div class="flex items-center justify-between border-b border-outline-variant pb-2">
+        <div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary">graphic_eq</span><h3 class="font-headline text-base font-bold text-on-surface">Signal Inspector (~35 Telemetry Features)</h3></div>
+        <button onclick="toggleSignalsTable()" id="btnToggleSignals" class="text-xs text-primary hover:underline font-semibold">Show Signals Table</button>
+      </div>
+      <div id="signalsContainer" class="hidden space-y-2">
+        <input id="signalsSearch" oninput="filterSignalsTable()" placeholder="Filter signals (e.g. praise, monologue, SNR)..." class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"/>
+        <div class="overflow-x-auto max-h-72 overflow-y-auto"><table class="w-full text-left text-xs border-collapse"><thead><tr class="border-b border-outline-variant text-outline font-semibold"><th class="py-2 px-3">Signal</th><th class="py-2 px-3">Description</th><th class="py-2 px-3 text-right">Value</th></tr></thead><tbody id="signalsTableBody" class="divide-y divide-outline-variant/40 font-label"></tbody></table></div>
+      </div>
+    </section>
+  </div>
+</main>
+<div id="ingestModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div class="px-6 py-4 border-b border-outline-variant flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-xl">upload_file</span><h2 class="text-base font-headline font-bold text-on-surface">Assess Class Recording</h2></div>
+      <button onclick="closeIngestModal()" class="text-outline hover:text-on-surface"><span class="material-symbols-outlined text-xl">close</span></button>
+    </div>
+    <div class="px-6 pt-3 border-b border-outline-variant bg-surface-container-low flex items-center gap-6 text-xs font-semibold shrink-0">
+      <button id="tabBtnDirect" onclick="switchTab('direct')" class="pb-2.5 border-b-2 border-primary text-primary flex items-center gap-1.5"><span class="material-symbols-outlined text-sm">file_upload</span>File Upload</button>
+      <button id="tabBtnUrl" onclick="switchTab('url')" class="pb-2.5 border-b-2 border-transparent text-outline hover:text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-sm">link</span>URL / Link</button>
+      <button id="tabBtnSamples" onclick="switchTab('samples')" class="pb-2.5 border-b-2 border-transparent text-outline hover:text-on-surface flex items-center gap-1.5"><span class="material-symbols-outlined text-sm">folder</span>Demo Samples</button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-6 space-y-4 bg-surface">
+      <div id="tabContentDirect">
+        <div onclick="document.getElementById('fileInput').click()" class="border-2 border-dashed border-outline-variant hover:border-primary rounded-xl p-6 text-center cursor-pointer transition-colors bg-surface-container-lowest">
+          <input type="file" id="fileInput" class="hidden" accept="video/*,audio/*,.mp4,.mkv,.mov,.webm,.m4a,.mp3,.wav" onchange="handleFileSelect(event)"/>
+          <span class="material-symbols-outlined text-3xl text-primary mb-1">cloud_upload</span><div class="text-xs font-semibold text-on-surface">Click to select or drag video/audio file</div><div class="text-[11px] text-outline mt-0.5">MP4, MKV, MOV, WAV, MP3</div>
+        </div>
+      </div>
+      <div id="tabContentUrl" class="hidden space-y-2">
+        <label class="block text-xs font-semibold text-on-surface">Hosted URL (Google Drive, YouTube, Zoom, or Direct Media):</label>
+        <div class="flex gap-2"><input type="text" id="urlInput" placeholder="https://drive.google.com/file/d/... or https://youtu.be/..." class="flex-1 bg-surface border border-outline-variant rounded p-2 text-xs text-on-surface focus:border-primary"/><button onclick="stageUrl()" class="px-4 py-2 bg-primary text-on-primary rounded text-xs font-bold hover:bg-opacity-90">Stage</button></div>
+      </div>
+      <div id="tabContentSamples" class="hidden space-y-2">
+        <div class="text-xs font-semibold text-on-surface">Available sample recordings on disk:</div><div id="samplesListContainer" class="space-y-1.5 max-h-40 overflow-y-auto pr-1"></div>
+      </div>
+      <div id="stagedItemCard" class="p-3 bg-surface-container-low border border-outline-variant rounded-lg flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2 truncate mr-2"><span class="material-symbols-outlined text-primary text-base">check_circle</span><span id="stagedItemTitle" class="font-semibold text-on-surface truncate">No recording selected</span><span id="stagedItemSub" class="text-outline text-[11px] font-label"></span></div>
+        <button onclick="clearStaged()" class="text-outline hover:text-error text-xs font-medium shrink-0">Clear</button>
+      </div>
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 text-xs">
+        <div class="font-bold text-on-surface border-b border-outline-variant pb-2">Pipeline Settings</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label class="block font-semibold mb-1">Whisper Speech Model</label><select id="cfgModel" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="base" selected>Base (Recommended: Fast & Accurate)</option><option value="small">Small (High Precision)</option><option value="tiny">Tiny (Fastest)</option><option value="medium">Medium (Accurate)</option></select></div>
+          <div><label class="block font-semibold mb-1">Max Duration (Minutes)</label><input id="cfgMaxMinutes" type="number" value="60" min="5" max="120" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"/></div>
+          <div class="sm:col-span-2"><label class="flex items-center gap-2 cursor-pointer"><input id="cfgFrames" type="checkbox" checked class="rounded border-outline text-primary focus:ring-primary"/><span>Extract visual frames for slide transitions & screen change detection</span></label></div>
+          <div><label class="block font-semibold mb-1">AI Review Engine</label><select id="cfgLlm" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="gemini" selected>Google Gemini (Recommended)</option><option value="openai-compatible">OpenAI (gpt-4o-mini)</option><option value="ollama">Local Ollama</option><option value="none">None (Deterministic only)</option></select></div>
+          <div><label class="block font-semibold mb-1">API Key (Optional override)</label><input id="cfgApiKey" type="password" placeholder="Gemini or OpenAI key" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs font-label text-on-surface focus:border-primary"/></div>
+          <div class="sm:col-span-2"><label class="block font-semibold mb-1">Application Password (if required by server)</label><input id="cfgToken" type="password" autocomplete="current-password" placeholder="Leave blank unless the server requires a password" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs font-label text-on-surface focus:border-primary"/></div>
+        </div>
+      </div>
+      <div id="modalProgressWrap" class="hidden p-3.5 bg-surface-container-low border border-primary/50 rounded-xl space-y-2">
+        <div class="flex justify-between items-center text-xs text-primary font-semibold"><span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>Processing Pipeline...</span></div>
+        <div id="modalLiveLogs" class="text-xs font-label text-on-surface-variant max-h-24 overflow-y-auto space-y-0.5"></div>
+      </div>
+      <div id="modalErrorWrap" class="hidden p-3 bg-error-container/40 border border-error rounded-xl text-xs text-on-error-container font-medium"></div>
+    </div>
+    <div class="px-6 py-3 border-t border-outline-variant flex items-center justify-between shrink-0">
+      <button onclick="closeIngestModal()" class="px-4 py-1.5 border border-outline-variant rounded text-xs font-semibold text-on-surface hover:bg-surface-container-low">Cancel</button>
+      <button id="btnStartAnalysis" onclick="startAnalysis()" class="px-5 py-1.5 bg-primary text-on-primary rounded text-xs font-bold hover:bg-opacity-90 flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"><span class="material-symbols-outlined text-base">play_arrow</span><span id="startBtnLabel">Start Assessment</span></button>
+    </div>
+  </div>
+</div>
+<script>
+let currentFile = null, stagedUrl = null, stagedSample = null, pollTimer = null, currentReport = null, signalsTableVisible = false;
+window.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+  loadPreloadedSamples(); setupMediaPlayer();
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeIngestModal(); });
+  try {
+    const res = await fetch('/api/latest'); const data = await res.json();
+    if (data && data.score) renderDashboard(data); else showEmptyState();
+  } catch { showEmptyState(); }
+});
+function showToast(msg) {
+  const t = document.getElementById('toast'); document.getElementById('toastMsg').textContent = msg;
+  t.classList.remove('translate-y-[-100px]', 'opacity-0'); setTimeout(() => t.classList.add('translate-y-[-100px]', 'opacity-0'), 2600);
+}
+function showEmptyState() { document.getElementById('emptyState').classList.remove('hidden'); document.getElementById('dashboardView').classList.add('hidden'); }
+function openIngestModal() { document.getElementById('ingestModal').classList.remove('hidden'); }
+function closeIngestModal() { document.getElementById('ingestModal').classList.add('hidden'); }
+function switchTab(t) {
+  ['direct', 'url', 'samples'].forEach(x => {
+    document.getElementById('tabContent' + cap(x)).classList.add('hidden');
+    const b = document.getElementById('tabBtn' + cap(x)); b.classList.remove('border-primary', 'text-primary'); b.classList.add('border-transparent', 'text-outline');
+  });
+  document.getElementById('tabContent' + cap(t)).classList.remove('hidden');
+  const act = document.getElementById('tabBtn' + cap(t)); act.classList.add('border-primary', 'text-primary'); act.classList.remove('border-transparent', 'text-outline');
+}
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function handleFileSelect(e) {
+  const f = e.target.files[0]; if (!f) return;
+  currentFile = f; stagedUrl = stagedSample = null; updateStaged(f.name, (f.size / (1024*1024)).toFixed(1) + ' MB');
+}
+function stageUrl() {
+  const u = document.getElementById('urlInput').value.trim(); if (!u) return;
+  stagedUrl = u; currentFile = stagedSample = null; updateStaged(u.split('/').pop() || 'Remote Media', 'Stream URL');
+}
+function selectSample(rel, name, sz) {
+  stagedSample = { relPath: rel, name, sizeMb: sz }; currentFile = stagedUrl = null; updateStaged(name, sz + ' MB (Local)');
+}
+function clearStaged() { currentFile = stagedUrl = stagedSample = null; updateStaged('No recording selected', ''); }
+function updateStaged(title, sub) { document.getElementById('stagedItemTitle').textContent = title; document.getElementById('stagedItemSub').textContent = sub; }
+async function loadPreloadedSamples() {
+  try {
+    const res = await fetch('/api/samples'); const samples = await res.json();
+    const cont = document.getElementById('samplesListContainer'), bench = document.getElementById('benchmarkCardsContainer');
+    if (!samples || !samples.length) { cont.innerHTML = '<div class="text-outline text-xs">No local samples found.</div>'; return; }
+    cont.innerHTML = samples.map(s => `
+      <div class="p-2 bg-surface-container-low border border-outline-variant rounded flex items-center justify-between hover:border-primary transition-colors cursor-pointer" onclick="selectSample('${s.rel_path}', '${esc(s.name)}', ${s.size_mb})">
+        <div class="truncate mr-2"><div class="text-xs font-semibold text-on-surface truncate">${esc(s.name)}</div><div class="text-[10px] font-label text-outline">${s.size_mb} MB</div></div>
+        <button class="px-2 py-0.5 bg-surface-container text-xs text-primary rounded border border-outline-variant hover:bg-primary hover:text-on-primary shrink-0">Select</button>
+      </div>`).join('');
+    const vids = samples.filter(s => s.name.endsWith('.mp4')).slice(0, 3);
+    if (vids.length && bench) {
+      bench.innerHTML = vids.map(s => {
+        const name = s.name.toLowerCase();
+        const level = name.includes('poor') || name.includes('silent') ? 'Poor' :
+          name.includes('average') || name.includes('malayalam') ? 'Average' :
+          name.includes('good') ? 'Good' : name.includes('excellent') ? 'Excellent' : 'Demo';
+        const badge = level === 'Demo' ? 'Demo Recording' : `${level} Benchmark`;
+        const col = level === 'Poor' ? 'border-error text-on-error-container bg-error-container/20' :
+          level === 'Average' ? 'border-[#d97707] text-[#ffb77d] bg-[#d97707]/20' :
+          level === 'Good' ? 'border-[#0284c7] text-[#93ccff] bg-[#0284c7]/20' :
+          level === 'Excellent' ? 'border-[#0f766e] text-[#6bd8cb] bg-[#0f766e]/20' :
+          'border-outline-variant text-outline bg-surface-container';
+        return `
+          <div class="bg-surface-container-lowest border border-outline-variant hover:border-primary rounded-xl p-4 flex flex-col justify-between transition-colors shadow-sm">
+            <div class="space-y-2">
+              <span class="px-2 py-0.5 rounded text-[10px] font-label font-bold border ${col}">${badge}</span>
+              <h4 class="font-headline font-bold text-xs text-on-surface line-clamp-2" title="${esc(s.name)}">${esc(s.name)}</h4>
+              <p class="text-[11px] font-label text-outline">${s.size_mb} MB</p>
+            </div>
+            <button onclick="selectSample('${s.rel_path}', '${esc(s.name)}', ${s.size_mb}); openIngestModal();" class="mt-4 w-full py-1.5 bg-surface-container-high hover:bg-primary hover:text-on-primary text-primary text-xs font-semibold rounded border border-outline-variant flex items-center justify-center gap-1.5 transition-colors">
+              <span class="material-symbols-outlined text-sm">play_arrow</span>Assess Sample
+            </button>
+          </div>`;
+      }).join('');
+    }
+  } catch (e) { console.error(e); }
+}
+async function startAnalysis() {
+  const errWrap = document.getElementById('modalErrorWrap'), progWrap = document.getElementById('modalProgressWrap');
+  const logs = document.getElementById('modalLiveLogs'), startBtn = document.getElementById('btnStartAnalysis');
+  errWrap.classList.add('hidden');
+  if (!currentFile && !stagedUrl && !stagedSample) {
+    errWrap.textContent = "Please select a file, URL, or sample recording."; errWrap.classList.remove('hidden'); return;
+  }
+  const fd = new FormData();
+  if (currentFile) fd.append('file', currentFile);
+  if (stagedUrl) fd.append('url', stagedUrl);
+  if (stagedSample) fd.append('sample', stagedSample.relPath);
+  fd.append('whisper_model', document.getElementById('cfgModel').value);
+  fd.append('use_frames', document.getElementById('cfgFrames').checked ? 'true' : 'false');
+  fd.append('max_minutes', document.getElementById('cfgMaxMinutes').value || '60');
+  fd.append('llm_backend', document.getElementById('cfgLlm').value);
+  const uk = document.getElementById('cfgApiKey').value.trim();
+  if (uk) fd.append('api_key', uk);
+  const token = document.getElementById('cfgToken').value;
+  if (token) fd.append('token', token);
+  progWrap.classList.remove('hidden'); logs.innerHTML = '<div class="text-primary font-semibold">Starting pipeline...</div>';
+  startBtn.disabled = true; document.getElementById('startBtnLabel').textContent = "Analyzing...";
+  try {
+    const res = await fetch('/assess', { method: 'POST', body: fd });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || res.statusText); }
+    const { job } = await res.json(); pollJob(job);
+  } catch (e) {
+    errWrap.textContent = e.message; errWrap.classList.remove('hidden'); progWrap.classList.add('hidden');
+    startBtn.disabled = false; document.getElementById('startBtnLabel').textContent = "Start Assessment";
+  }
+}
+function pollJob(jid) {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/jobs/' + jid);
+      if (!res.ok) return;
+      const job = await res.json();
+      const logs = document.getElementById('modalLiveLogs');
+      if (job.messages && job.messages.length) {
+        logs.innerHTML = job.messages.map(m => `<div>▸ ${esc(m)}</div>`).join('');
+        logs.scrollTop = logs.scrollHeight;
+      }
+      if (job.status === 'done') {
+        clearInterval(pollTimer); document.getElementById('modalProgressWrap').classList.add('hidden');
+        document.getElementById('btnStartAnalysis').disabled = false; document.getElementById('startBtnLabel').textContent = "Start Assessment";
+        renderDashboard(job.report); closeIngestModal(); showToast("Assessment complete!");
+      } else if (job.status === 'error') {
+        clearInterval(pollTimer); document.getElementById('modalProgressWrap').classList.add('hidden');
+        document.getElementById('btnStartAnalysis').disabled = false; document.getElementById('startBtnLabel').textContent = "Start Assessment";
+        const errWrap = document.getElementById('modalErrorWrap'); errWrap.textContent = job.error || "Assessment failed."; errWrap.classList.remove('hidden');
+      }
+    } catch (e) { console.error(e); }
+  }, 1000);
+}
+function renderDashboard(r) {
+  currentReport = r;
+  document.getElementById('emptyState').classList.add('hidden'); document.getElementById('dashboardView').classList.remove('hidden');
+  const f = r.features || {}, lbl = (r.label || 'Average').toUpperCase();
+  document.getElementById('sessionFileName').textContent = r.file_name || 'Classroom Session';
+  document.getElementById('sessionDuration').textContent = ((f.duration_s || 0) / 60).toFixed(1) + ' min duration';
+  document.getElementById('sessionLanguage').textContent = 'Language: ' + (r.language || 'en');
+  document.getElementById('sessionDiarization').textContent = f.diarization_confident ? 'Speakers: Teacher & Student Identified' : 'Speakers: Combined / Single Speaker';
+  const pCard = document.getElementById('playerCard'), player = document.getElementById('mediaPlayer');
+  if (r.media_url) { player.src = r.media_url; pCard.classList.remove('hidden'); } else { pCard.classList.add('hidden'); player.src = ''; }
+  document.getElementById('heroScore').textContent = r.score.toFixed(2);
+  const badge = document.getElementById('heroBadge'); badge.textContent = lbl;
+  badge.className = "px-3 py-1 rounded font-label text-xs font-bold border " + (
+    lbl === 'EXCELLENT' ? 'border-[#0f766e] bg-[#0f766e]/20 text-[#6bd8cb]' :
+    lbl === 'GOOD' ? 'border-[#0284c7] bg-[#0284c7]/20 text-[#93ccff]' :
+    lbl === 'AVERAGE' ? 'border-[#d97707] bg-[#d97707]/20 text-[#ffb77d]' :
+    'border-error bg-error-container/40 text-on-error-container');
+  document.getElementById('heroConfidence').textContent = (r.confidence || 'Medium').toUpperCase();
+  const sumBox = document.getElementById('aiSummaryBox');
+  sumBox.innerHTML = r.summary ? `<strong>Pedagogical Summary:</strong> ${esc(r.summary)}` :
+    `<strong>Deterministic Evaluation:</strong> Evaluated ${Object.keys(f).length} measured interaction signals across ${f.n_segments || 0} transcript turns.`;
+  if (r.notes && r.notes.length) sumBox.innerHTML += `<div class="mt-2 text-tertiary font-label text-[11px]">Note: ${esc(r.notes.join('; '))}</div>`;
+  const stShare = ((f.student_share || 0) * 100).toFixed(1);
+  document.getElementById('metricStudentTalk').textContent = stShare + '%';
+  document.getElementById('barStudentTalk').style.width = Math.min(100, Math.max(5, stShare)) + '%';
+  document.getElementById('metricQuestions').textContent = (f.questions || 0) + ' inquiries';
+  document.getElementById('subQuestions').textContent = `${(f.questions_per_min || 0).toFixed(1)}/min • ${((f.open_question_share || 0) * 100).toFixed(0)}% open-ended`;
+  document.getElementById('metricMonologue').textContent = Math.round(f.longest_teacher_monologue_s || 0) + 's';
+  document.getElementById('subMonologue').textContent = `Pace: ${Math.round(f.teacher_wpm || 0)} wpm • >90s turns: ${f.teacher_turns_over_90s || 0}`;
+  document.getElementById('metricPraise').textContent = (f.praise_per_min || 0).toFixed(2) + '/m';
+  document.getElementById('subDeadAir').textContent = `Dead air: ${((f.dead_air_ratio || 0) * 100).toFixed(1)}% (${f.dead_air_events || 0} gaps >8s)`;
+  const obs = r.observations || [], strengths = obs.filter(o => o.polarity === '+'), concerns = obs.filter(o => o.polarity === '-');
+  document.getElementById('strengthsBadge').textContent = strengths.length; document.getElementById('concernsBadge').textContent = concerns.length;
+  const renderObs = (items, isGood) => items.length ? items.map(o => `
+    <div class="p-2.5 rounded bg-surface border border-outline-variant hover:border-${isGood ? 'secondary' : 'error'} transition-colors text-xs space-y-1">
+      <div class="flex items-center justify-between font-semibold text-${isGood ? 'secondary' : 'error'}"><span>${esc(o.dimension)}</span><span class="font-label text-[10px] text-outline font-normal">${esc(o.source || 'metrics')}</span></div>
+      <p class="text-on-surface-variant leading-relaxed">${esc(o.text)}</p>
+    </div>`).join('') : `<div class="text-xs text-outline p-2">${isGood ? 'No strengths flagged.' : 'No concerns detected.'}</div>`;
+  document.getElementById('strengthsList').innerHTML = renderObs(strengths, true);
+  document.getElementById('concernsList').innerHTML = renderObs(concerns, false);
+  document.getElementById('dimensionBarsList').innerHTML = (r.dimensions || []).map(d => {
+    const pct = Math.max(5, Math.min(100, (d.score / 5) * 100));
+    const grade = d.score >= 3.75 ? 'EXCELLENT' : d.score >= 3.4 ? 'GOOD' : d.score >= 2.6 ? 'AVERAGE' : 'POOR';
+    const col = d.score >= 3.75 ? '#6bd8cb' : d.score >= 3.4 ? '#93ccff' : d.score >= 2.6 ? '#ffb77d' : '#ffb4ab';
+    return `
+      <div class="p-2.5 rounded bg-surface border border-outline-variant flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div class="w-full md:w-5/12"><div class="flex items-center justify-between font-semibold text-on-surface"><span>${esc(d.name)}</span><span class="font-label text-[11px] text-outline">Weight: ${(d.weight * 100).toFixed(0)}%</span></div><span class="font-label text-[10px] text-outline">Source: ${esc(d.source)}</span></div>
+        <div class="w-full md:w-5/12 flex items-center gap-3"><div class="w-full bg-surface-container h-2 rounded overflow-hidden"><div class="h-full rounded" style="width:${pct}%; background:${col}"></div></div><span class="font-label text-sm text-on-surface shrink-0 w-16 text-right">${d.score.toFixed(2)} <span class="text-xs text-outline">/5</span></span></div>
+        <div class="md:w-2/12 flex justify-end"><span class="px-2 py-0.5 rounded text-[10px] font-label font-bold border" style="color:${col}; border-color:${col}40; background:${col}15">${grade}</span></div>
+      </div>`;
+  }).join('');
+  const tr = r.transcript || [];
+  document.getElementById('transcriptCountBadge').textContent = tr.length + ' turns';
+  renderTranscriptRows(tr); renderSignalsTable(f);
+}
+function renderTranscriptRows(items) {
+  const box = document.getElementById('transcriptBox');
+  if (!items || !items.length) { box.innerHTML = '<div class="text-xs text-outline p-3">No dialogue segments.</div>'; return; }
+  box.innerHTML = items.map((t, i) => `
+    <div id="turn-${i}" class="p-2 rounded bg-surface border border-outline-variant/60 flex items-start gap-3 transcript-item transition-all hover:border-primary cursor-pointer" data-speaker="${esc(t.speaker || '')}" data-start="${t.start || 0}" onclick="seekToTime(${t.start || 0}, ${i})">
+      <span class="px-1.5 py-0.5 rounded bg-surface-container-high font-label text-[10px] text-primary shrink-0">${esc(t.t || '00:00')}</span>
+      <span class="px-2 py-0.5 rounded text-[10px] font-label font-bold uppercase shrink-0 ${t.speaker === 'teacher' ? 'bg-primary/20 text-primary border border-primary/40' : 'bg-secondary/20 text-secondary border border-secondary/40'}">${esc(t.speaker || 'SPEAKER')}</span>
+      <p class="text-xs text-on-surface flex-1">${esc(t.text || '')}</p>
+    </div>`).join('');
+}
+function seekToTime(seconds, turnIndex) {
+  const p = document.getElementById('mediaPlayer');
+  if (p && p.src) { p.currentTime = seconds; p.play(); }
+  document.querySelectorAll('.transcript-item').forEach(el => el.classList.remove('playing-turn'));
+  const el = document.getElementById('turn-' + turnIndex);
+  if (el) { el.classList.add('playing-turn'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+function setupMediaPlayer() {
+  const p = document.getElementById('mediaPlayer');
+  p.addEventListener('timeupdate', () => {
+    const cur = p.currentTime; const min = Math.floor(cur / 60), sec = Math.floor(cur % 60);
+    const dMin = Math.floor(p.duration / 60) || 0, dSec = Math.floor(p.duration % 60) || 0;
+    document.getElementById('playbackTime').textContent = `${min}:${sec < 10 ? '0' : ''}${sec} / ${dMin}:${dSec < 10 ? '0' : ''}${dSec}`;
+    if (currentReport && currentReport.transcript) {
+      const idx = currentReport.transcript.findIndex(t => cur >= (t.start || 0) && cur <= (t.end || t.start + 3));
+      if (idx !== -1) {
+        document.querySelectorAll('.transcript-item').forEach(el => el.classList.remove('playing-turn'));
+        const el = document.getElementById('turn-' + idx);
+        if (el) el.classList.add('playing-turn');
+      }
+    }
+  });
+}
+function filterTranscript() {
+  const q = document.getElementById('transcriptSearch').value.toLowerCase();
+  const spk = document.getElementById('speakerFilter').value;
+  document.querySelectorAll('.transcript-item').forEach(el => {
+    const txt = el.textContent.toLowerCase(), s = el.getAttribute('data-speaker') || '';
+    el.style.display = ((!q || txt.includes(q)) && (spk === 'all' || s === spk)) ? 'flex' : 'none';
+  });
+}
+function copyTranscriptText() {
+  if (!currentReport || !currentReport.transcript) return;
+  const text = currentReport.transcript.map(t => `[${t.t}] ${t.speaker.toUpperCase()}: ${t.text}`).join('\n');
+  navigator.clipboard.writeText(text); showToast("Transcript copied to clipboard!");
+}
+function copyFullReport() {
+  if (!currentReport) return;
+  const rep = `ClassLens Assessment Report\nRecording: ${currentReport.file_name}\nScore: ${currentReport.score}/5.00 (${currentReport.label})\n\nSummary: ${currentReport.summary || 'N/A'}\n\nDimensions:\n` +
+    (currentReport.dimensions || []).map(d => `- ${d.name}: ${d.score}/5.00 (${(d.weight*100).toFixed(0)}%)`).join('\n');
+  navigator.clipboard.writeText(rep); showToast("Report summary copied to clipboard!");
+}
+function renderSignalsTable(f) {
+  document.getElementById('signalsTableBody').innerHTML = Object.entries(f).filter(([k]) => !k.startsWith('_')).map(([k, v]) => `
+    <tr class="signal-row hover:bg-surface-container-low transition-colors" data-name="${esc(k).toLowerCase()}">
+      <td class="py-2 px-3 text-on-surface font-medium">${esc(k)}</td>
+      <td class="py-2 px-3 text-outline text-[11px]">${getSignalDescription(k)}</td>
+      <td class="py-2 px-3 text-right text-primary font-bold">${v === null ? '—' : (typeof v === 'number' ? v.toFixed(3) : v)}</td>
+    </tr>`).join('');
+}
+function filterSignalsTable() {
+  const q = document.getElementById('signalsSearch').value.toLowerCase();
+  document.querySelectorAll('.signal-row').forEach(r => {
+    r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? 'table-row' : 'none';
+  });
+}
+function toggleSignalsTable() {
+  const c = document.getElementById('signalsContainer'), b = document.getElementById('btnToggleSignals');
+  signalsTableVisible = !signalsTableVisible;
+  c.classList.toggle('hidden', !signalsTableVisible);
+  b.textContent = signalsTableVisible ? 'Hide Signals Table' : 'Show Signals Table';
+}
+function getSignalDescription(k) {
+  const m = {
+    duration_s: 'Total duration in seconds', speech_ratio: 'Fraction of class with speech',
+    student_share: 'Student fraction of speaking time (22–60% ideal)', median_wait_s: 'Median wait pause following questions',
+    longest_teacher_monologue_s: 'Longest continuous teacher speech turn without student response',
+    questions_per_min: 'Teacher inquiries per active minute', open_question_share: 'Share of open-ended questions',
+    question_response_rate: 'Percentage of teacher questions answered', teacher_wpm: 'Teacher pace in words per minute',
+    praise_per_min: 'Encouraging verbal feedback frequency', dead_air_ratio: 'Fraction of duration with long silences (>8s)',
+    speech_to_background_db: 'Acoustic Signal-to-Noise Ratio (dB)', screen_changes_per_min: 'Visual slide transitions per minute',
+  };
+  return m[k] || 'Measured telemetry feature';
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+</body>
+</html>

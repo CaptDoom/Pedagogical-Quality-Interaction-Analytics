@@ -1,0 +1,7 @@
+{
+  "thresholds": {"Poor": 2.6, "Average": 3.4, "Good": 3.75},
+  "weights": {
+    "Responsiveness": 0.0
+  },
+  "_calibration_note": "Tuned 2026-10-22 on 3 labelled samples (demo_malayalam=Average, B472/B491=Excellent) via calibrate.py. Good cut-off 4.1 -> 3.75: the two Excellent recordings scored 3.81 and 4.16 after re-weighting. Responsiveness weight 10% -> 0: median wait measured 0.0s in every sample (Whisper segments meet at speaker boundaries), Spearman NaN - a flat signal earns no weight per the calibration rule. Revisit after word-level wait-time measurement or more samples."
+}
