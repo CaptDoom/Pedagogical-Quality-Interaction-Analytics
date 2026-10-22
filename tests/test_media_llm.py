@@ -148,7 +148,7 @@ def test_gemini_backend_routing(monkeypatch):
     assert res["content_accuracy"] == 5
 
 
-def test_transcribe_pins_stable_language_and_splits_word_pauses(monkeypatch):
+def test_transcribe_detects_language_in_one_pass_and_splits_word_pauses(monkeypatch):
     from types import SimpleNamespace
 
     calls = []
@@ -170,12 +170,33 @@ def test_transcribe_pins_stable_language_and_splits_word_pauses(monkeypatch):
     segments, language = transcribe(np.zeros(3 * SR, dtype=np.float32), "tiny")
 
     assert language == "ml"
+    assert len(calls) == 1
     assert calls[0][0] is None
-    assert calls[1][0] == "ml"
-    assert calls[1][1]["word_timestamps"] is True
+    assert calls[0][1]["word_timestamps"] is True
     assert [segment.text for segment in segments] == ["Hello there", "friend"]
     assert segments[0].confidence == pytest.approx(0.85)
     assert segments[1].confidence == pytest.approx(0.7)
+
+
+def test_transcribe_honors_explicit_language(monkeypatch):
+    from types import SimpleNamespace
+
+    calls = []
+
+    class FakeModel:
+        def transcribe(self, audio, language=None, **kwargs):
+            calls.append(language)
+            info = SimpleNamespace(language=language, duration=3.0)
+            segment = SimpleNamespace(start=0.0, end=0.5, text=" Hello", words=[])
+            return iter([segment]), info
+
+    monkeypatch.setattr("assessor.transcribe._model", lambda *args: FakeModel())
+
+    segments, language = transcribe(np.zeros(3 * SR, dtype=np.float32), "tiny", language="ml")
+
+    assert calls == ["ml"]
+    assert language == "ml"
+    assert [segment.text for segment in segments] == ["Hello"]
 
 
 def test_transcribe_retries_cuda_failure_on_cpu(monkeypatch):

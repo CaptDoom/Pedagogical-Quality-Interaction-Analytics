@@ -88,6 +88,10 @@ def test_rising_pitch_detection_uses_numpy_estimator():
     assert _is_rising_pitch(rising_tone, SR, Segment(0, 2, "statement"))
 
 
+def test_rising_pitch_detection_ignores_unvoiced_silence():
+    assert not _is_rising_pitch(np.zeros(2 * SR, dtype=np.float32), SR, Segment(0, 2, "silence"))
+
+
 def test_low_confidence_transcript_does_not_drive_lexical_cues():
     features = compute_features(
         [Segment(0, 4, "Great job, excellent work!", confidence=0.1)],

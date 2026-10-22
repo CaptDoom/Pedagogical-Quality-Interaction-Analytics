@@ -25,7 +25,7 @@ def get_optimal_device() -> tuple[str, str]:
 def _model(size: str, device: str, compute: str):
     from faster_whisper import WhisperModel
 
-    threads = max(1, (os.cpu_count() or 4) - 1) if device == "cpu" else 4
+    threads = min(4, max(1, (os.cpu_count() or 2) - 1)) if device == "cpu" else 4
     return WhisperModel(size, device=device, compute_type=compute, cpu_threads=threads)
 
 
@@ -38,21 +38,9 @@ def transcribe(audio: str | np.ndarray, model_size: str = "base", device: str | 
     dev, compute = (device, "int8" if device == "cpu" else "float16") if device else get_optimal_device()
 
     def run(model, active_device: str) -> tuple[list[Segment], str | None]:
-        nonlocal language
-        if language is None and isinstance(audio, np.ndarray) and len(audio):
-            if progress:
-                progress("Detecting the recording language")
-            probe_audio = audio[: 15 * 16000]
-            probe_gen, probe_info = model.transcribe(
-                probe_audio, language=None, vad_filter=True, beam_size=1, best_of=1,
-                condition_on_previous_text=False,
-            )
-            next(probe_gen, None)
-            if getattr(probe_info, "language_probability", 0.0) >= 0.8:
-                language = probe_info.language
-
         if progress:
-            progress(f"Transcribing with Whisper {model_size} on {active_device}")
+            action = "Detecting language and transcribing" if language is None else "Transcribing"
+            progress(f"{action} with Whisper {model_size} on {active_device}")
         segs_gen, info = model.transcribe(
             audio,
             language=language,

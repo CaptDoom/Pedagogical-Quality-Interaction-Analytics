@@ -309,6 +309,9 @@ def _is_rising_pitch(y: np.ndarray, sr: int, segment: Segment) -> bool:
     f0 = _yin_pitch(clip, sr)
     if len(f0) < 8:
         return False
+    f0 = f0[np.isfinite(f0) & (f0 >= 65) & (f0 <= 500)]
+    if len(f0) < 8:
+        return False
     split = len(f0) // 2
     return bool(12 * np.log2(np.median(f0[split:]) / np.median(f0[:split])) >= 1.2)
 
