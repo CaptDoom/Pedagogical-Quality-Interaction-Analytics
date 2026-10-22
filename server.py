@@ -1,6 +1,6 @@
 """ClassLens HTTP service (FastAPI).
 
-Run:  uvicorn server:app --port 8000      (or: python server.py)
+Run:  uvicorn server:app --host 0.0.0.0 --port 10000  (or: python server.py)
 UI:   http://localhost:8000/              high-fidelity pedagogical dashboard and ingestion modal.
 
 POST /assess starts a job (file upload, link, or local sample; settings as form fields) and returns {job}.
