@@ -176,8 +176,10 @@ def _looks_direct(url: str) -> bool:
 
 
 def extract_audio(src: str, dst: str, max_minutes: float | None = None,
-                  denoised_dst: str | None = None) -> None:
+                  denoised_dst: str | None = None, denoise: bool = False) -> None:
     cmd = ["ffmpeg", "-y", "-i", src, "-map", "0:a:0?", "-vn", "-ac", "1", "-ar", "16000"]
+    if denoise and not denoised_dst:
+        cmd += ["-af", "highpass=f=70,afftdn=nf=-25"]
     if max_minutes:
         cmd += ["-t", str(int(max_minutes * 60))]
     cmd.append(dst)

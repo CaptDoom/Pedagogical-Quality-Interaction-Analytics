@@ -25,7 +25,7 @@ def get_optimal_device() -> tuple[str, str]:
 def _model(size: str, device: str, compute: str):
     from faster_whisper import WhisperModel
 
-    threads = min(4, max(1, (os.cpu_count() or 2) - 1)) if device == "cpu" else 4
+    threads = min(2, max(1, (os.cpu_count() or 2) - 1)) if device == "cpu" else 2
     return WhisperModel(size, device=device, compute_type=compute, cpu_threads=threads)
 
 

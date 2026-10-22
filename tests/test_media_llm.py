@@ -99,7 +99,7 @@ def test_pipeline_degrades_when_llm_fails(tmp_path, monkeypatch):
     src = tmp_path / "input.mp4"
     src.write_bytes(b"not-really-a-video")
 
-    def fake_extract(path, dst, max_minutes=None, denoised_dst=None):
+    def fake_extract(path, dst, max_minutes=None, denoised_dst=None, denoise=False):
         t = np.arange(int(14 * SR)) / SR
         y = 0.1 * np.sin(2 * np.pi * 220 * t) * (1 + 0.3 * np.sin(2 * np.pi * 0.8 * t))
         import soundfile as sf
@@ -240,7 +240,7 @@ def test_pipeline_rejects_recordings_without_detected_speech(tmp_path, monkeypat
     src = tmp_path / "silent.mp4"
     src.write_bytes(b"test media")
 
-    def fake_extract(path, dst, max_minutes=None, denoised_dst=None):
+    def fake_extract(path, dst, max_minutes=None, denoised_dst=None, denoise=False):
         import soundfile as sf
 
         silence = np.zeros(3 * SR, dtype=np.float32)
@@ -261,10 +261,12 @@ def test_pipeline_skips_speaker_model_when_diarization_disabled(tmp_path, monkey
     monkeypatch.setattr(pl, "has_ffmpeg", lambda: True)
     src = tmp_path / "input.mp4"
     src.write_bytes(b"test media")
+    denoise_options = []
 
-    def fake_extract(path, dst, max_minutes=None, denoised_dst=None):
+    def fake_extract(path, dst, max_minutes=None, denoised_dst=None, denoise=False):
         import soundfile as sf
 
+        denoise_options.append(denoise)
         audio = np.sin(2 * np.pi * 220 * np.arange(5 * SR) / SR).astype(np.float32) * 0.1
         sf.write(dst, audio, SR)
         if denoised_dst:
@@ -282,3 +284,4 @@ def test_pipeline_skips_speaker_model_when_diarization_disabled(tmp_path, monkey
     assert report["diarization"]["method"] == "disabled"
     assert report["diarization"]["confident"] is False
     assert any("Speaker separation was disabled" in note for note in report["notes"])
+    assert denoise_options == [True]

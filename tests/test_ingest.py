@@ -66,3 +66,26 @@ def test_extract_audio_creates_raw_and_denoised_tracks(tmp_path):
     assert raw_sr == clean_sr == 16000
     assert len(raw_audio) == len(clean_audio)
     assert np.any(clean_audio)
+
+
+def test_extract_audio_denoises_without_creating_a_second_track(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import assessor.media as media
+
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        with open(command[-1], "wb") as output_file:
+            output_file.write(b"wav")
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(media.subprocess, "run", fake_run)
+    output = tmp_path / "clean.wav"
+    extract_audio("lesson.mp4", str(output), max_minutes=5, denoise=True)
+
+    assert output.is_file()
+    assert calls[0].count("-i") == 1
+    assert calls[0][-1] == str(output)
+    assert calls[0][calls[0].index("-af") + 1] == "highpass=f=70,afftdn=nf=-25"

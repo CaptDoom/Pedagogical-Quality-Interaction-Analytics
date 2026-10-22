@@ -8,7 +8,7 @@ ClassLens is a local-first tool for reviewing recorded online lessons. Upload an
 
 ## Project description
 
-The pipeline reduces steady background noise, transcribes speech locally with faster-whisper, estimates teacher/student turns, measures interaction and delivery signals, and scores those signals using a configurable rubric. Optional LLM review can add qualitative feedback. When that review is enabled, **transcript text and aggregate metrics** are sent to the selected provider; audio and video frames are not sent. Sampled-frame OCR runs locally with Tesseract and sends no images or extracted text to an external service.
+The hosted dashboard follows a deliberately small, deterministic path: it reduces steady background noise, transcribes locally with Whisper `tiny`, measures audio and transcript signals, and scores the result without sending data to an external AI service. It does not process video frames or separate speakers, so participation estimates are unavailable. The analysis modules retain optional capabilities for local experimentation, but they are not enabled by the web service.
 
 For the full product description, see [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md). For click-by-click instructions and troubleshooting, see [USER_GUIDE.md](USER_GUIDE.md).
 
@@ -17,10 +17,8 @@ For the full product description, see [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTI
 - Upload local audio/video or ingest supported Google Drive, direct HTTP, and yt-dlp-supported media links.
 - Monitor an asynchronous analysis job and view its result in the dashboard.
 - Inspect the transcript, teacher/student estimate, rubric dimensions, score, and timestamped observations.
-- Optionally sample video frames for low-weight screen-change signals and local OCR text-density/change measurements.
 - Split word-timestamped transcript segments at pauses, retain per-segment Whisper confidence, and use audio activity for silence and wait-time estimates.
-- Estimate speaker embeddings locally with SpeechBrain ECAPA; install its model weights on first use. If embedding extraction or clustering is unreliable, speaker separation remains explicitly unconfident and is scored neutrally.
-- Choose deterministic scoring, a local Ollama backend, Gemini, or an OpenAI-compatible endpoint.
+- Run the hosted dashboard with a single CPU-friendly Whisper model and deterministic scoring.
 - Run the FastAPI interactive API documentation at `/api`.
 
 ## Quick start
@@ -55,29 +53,11 @@ Install FFmpeg with the operating system's package manager first. The service li
 
 ### Deploy to Render
 
-The repository includes a Render Blueprint (`render.yaml`) and Docker image definition. In Render, create or sync a Blueprint from this repository and select the `main` branch. The service uses the Standard plan, installs FFmpeg, its development headers and `pkg-config` (so PyAV can build if pip has no compatible wheel), and Tesseract. The Docker build verifies that PyAV imports, FFmpeg is available, and NumPy pitch estimation works as the non-root application user. Pitch cues use an internal NumPy YIN estimator, avoiding runtime Numba cache failures in librosa. It checks `/health` and defaults to Whisper `tiny` for faster CPU inference, deterministic review (no external LLM request), and speaker diarization disabled. Choose `base` or a larger model in Pipeline Settings if transcription accuracy is more important than speed. A 2 GB persistent disk at `/var/data` caches Whisper and optional SpeechBrain weights across deploys; persistent storage can add Render charges and causes brief downtime during deploys. If the existing service is not managed by this Blueprint, add the disk in Render's service settings with that mount path. The Blueprint generates an `APP_PASSWORD`; find its value in the service's environment settings and enter it in the dashboard before submitting an assessment. The password also protects report and job endpoints.
+The repository includes a Render Blueprint (`render.yaml`) and Docker image definition. In Render, create or sync a Blueprint from this repository and select the `main` branch. The service installs FFmpeg and its development libraries for PyAV. The Docker build verifies PyAV, FFmpeg, and NumPy pitch estimation; the pitch estimator avoids runtime Numba cache failures in librosa. The service checks `/health` and uses Whisper `tiny`, deterministic scoring, audio-only analysis, and disabled speaker separation to limit CPU and memory use. A 2 GB persistent disk at `/var/data` caches Whisper weights across deploys; persistent storage can add Render charges and causes brief downtime during deploys. If the existing service is not managed by this Blueprint, add the disk in Render's service settings with that mount path. The Blueprint generates an `APP_PASSWORD`; find its value in the service's environment settings and enter it in the dashboard before submitting an assessment. The password also protects report and job endpoints.
 
-The first assessment downloads speech-model weights and requires outbound network access. The model cache and in-memory jobs/reports are not persistent across a new deployment or instance replacement. Uploaded recordings are processed from temporary storage and removed after analysis. Do not use this public service for recordings unless you have appropriate consent and access controls. For Render, the dashboard defaults to Whisper `tiny`; locally it defaults to `base`. Both use a 15-minute analysis limit, visual frame analysis off, and speaker diarization off to avoid unexpectedly long CPU jobs. Speaker diarization can be enabled per run; frame sampling/OCR is also optional in Pipeline Settings. Combined-voice mode does not estimate teacher/student participation, and the report calls this out. Choose the slower `base`, `small`, or `medium` model, a longer duration, or diarization when the accuracy tradeoff is acceptable. Tailwind styles are precompiled and served locally rather than loaded from the development CDN. After changing dashboard utility classes, run `npm install` and `npm run build:css` to refresh `web/styles.css`.
+The first assessment downloads speech-model weights and requires outbound network access. Jobs and the latest report are held in process memory and are lost after a service restart; the dashboard retries temporary gateway errors, but a lost job must be resubmitted. Uploaded recordings are processed from temporary storage and removed after analysis. The dashboard accepts recordings up to 15 minutes, uses one Whisper `tiny` model, and does not enable frame extraction, speaker separation, or external AI review. Combined-voice mode cannot estimate teacher/student participation, and the report calls this out. Do not use this public service for recordings unless you have appropriate consent and access controls. Tailwind styles are precompiled and served locally rather than loaded from the development CDN. After changing dashboard utility classes, run `npm install` and `npm run build:css` to refresh `web/styles.css`.
 
-## Configure optional LLM review
-
-Create a `.env` file in the project directory (it is ignored by Git) and add only the settings for your chosen provider:
-
-```dotenv
-# Optional: Gemini
-GEMINI_API_KEY=your-key
-# Optional: OpenAI-compatible service
-OPENAI_API_KEY=your-key
-OPENAI_MODEL=gpt-4o-mini
-# OPENAI_BASE_URL=https://api.openai.com/v1
-# Optional: local Ollama
-# OLLAMA_HOST=http://localhost:11434
-# OLLAMA_MODEL=qwen2.5:7b
-# Optional: require a password on assessment requests
-# APP_PASSWORD=choose-a-long-random-password
-```
-
-The UI also accepts a per-request provider key and, when configured, the application password. Never commit `.env` or paste secrets into issue reports. Select **None (Deterministic only)** to avoid sending transcript data to an external LLM. See [USER_GUIDE.md](USER_GUIDE.md) for data handling details.
+The hosted web service uses deterministic scoring only. It does not accept provider API keys or send transcripts to external AI services. To protect assessment routes, configure `APP_PASSWORD` in the deployment environment and enter it in the dashboard; never commit passwords or `.env` files.
 
 ## API
 
@@ -93,7 +73,7 @@ The UI also accepts a per-request provider key and, when configured, the applica
 | `GET` | `/jobs/{id}` | Poll job state, progress messages, and report |
 | `GET` | `/api/media?path=...` | Stream a project-local media asset |
 
-`POST /assess` accepts multipart form fields such as `file`, `url`, `sample`, `whisper_model`, `use_frames`, `max_minutes`, `llm_backend`, `api_key`, and `token`. It returns a job ID before analysis starts; poll `GET /jobs/{id}` for progress. FastAPI runs analysis as a post-response background task. Jobs are held in process memory; restarting the service clears jobs and the latest report.
+`POST /assess` accepts multipart form fields `file`, `url`, or `sample`, with optional `max_minutes` (1–15) and `token`. It always uses Whisper `tiny`, deterministic scoring, and audio-only analysis. It returns a job ID before analysis starts; poll `GET /jobs/{id}` for progress. FastAPI runs analysis as a post-response background task. Jobs are held in process memory; restarting the service clears jobs and the latest report.
 
 ## Test
 

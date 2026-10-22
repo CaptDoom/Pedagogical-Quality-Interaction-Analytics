@@ -33,21 +33,7 @@ app = FastAPI(title="ClassLens", docs_url="/api")
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_PAGE = ROOT_DIR / "web" / "index.html"
 WEB_DIR = ROOT_DIR / "web"
-WHISPER_MODELS = {"tiny", "base", "small", "medium"}
-LLM_BACKENDS = {"none", "gemini", "google", "openai-compatible", "ollama", "anthropic"}
-
-
-def _configured_whisper_model() -> str:
-    return os.environ.get("CLASSLENS_DEFAULT_WHISPER_MODEL", os.environ.get("WHISPER_MODEL", "base"))
-
-
-DEFAULT_WHISPER_MODEL = _configured_whisper_model()
-DEFAULT_LLM_BACKEND = os.environ.get("DEFAULT_LLM_BACKEND", "none")
-DEFAULT_SPEAKER_DIARIZATION = os.environ.get("SPEAKER_DIARIZATION", "false").lower() in {"1", "true", "yes"}
-if DEFAULT_WHISPER_MODEL not in WHISPER_MODELS:
-    raise RuntimeError(f"Unsupported WHISPER_MODEL {DEFAULT_WHISPER_MODEL!r}.")
-if DEFAULT_LLM_BACKEND not in LLM_BACKENDS:
-    raise RuntimeError(f"Unsupported DEFAULT_LLM_BACKEND {DEFAULT_LLM_BACKEND!r}.")
+DEFAULT_WHISPER_MODEL = "tiny"
 JOBS: dict[str, dict] = {}
 LATEST_REPORT: dict | None = None
 _LOCK = threading.Lock()  # one analysis at a time: whisper already saturates the CPU
@@ -72,17 +58,15 @@ def _require_password(x_app_password: str = Header(default="")) -> None:
         raise HTTPException(status_code=401, detail="Wrong or missing password.")
 
 
-def _run(job: dict, source: str, saved_path: str | None, model: str, use_frames: bool,
-         llm_backend: str, max_minutes: int, api_key: str | None = None,
-         display_name: str | None = None, use_diarization: bool = False) -> None:
+def _run(job: dict, source: str, saved_path: str | None, max_minutes: int,
+         display_name: str | None = None) -> None:
     global LATEST_REPORT
     tmpdir = saved_path and os.path.dirname(saved_path)
     try:
         job["status"] = "running"
         with _LOCK:
-            report = analyze(source, model, use_frames, llm_backend, max_minutes,
-                             progress=lambda m: job["messages"].append(m), api_key=api_key,
-                             use_diarization=use_diarization)
+            report = analyze(source, DEFAULT_WHISPER_MODEL, False, "none", max_minutes,
+                             progress=lambda m: job["messages"].append(m), use_diarization=False)
         report["file_name"] = display_name or os.path.basename(source)
         try:
             src_p = Path(source).resolve()
@@ -112,8 +96,9 @@ def health_check():
 def public_config():
     return {
         "whisper_model": DEFAULT_WHISPER_MODEL,
-        "llm_backend": DEFAULT_LLM_BACKEND,
-        "speaker_diarization": DEFAULT_SPEAKER_DIARIZATION,
+        "llm_backend": "none",
+        "speaker_diarization": False,
+        "use_frames": False,
     }
 
 
@@ -181,12 +166,7 @@ async def assess(
     file: UploadFile | None = File(None),
     url: str = Form(""),
     sample: str = Form(""),
-    whisper_model: str = Form(DEFAULT_WHISPER_MODEL),
-    use_frames: str = Form("false"),
-    max_minutes: int = Form(15, ge=1, le=120),
-    llm_backend: str = Form(DEFAULT_LLM_BACKEND),
-    speaker_diarization: bool = Form(DEFAULT_SPEAKER_DIARIZATION),
-    api_key: str = Form(""),
+    max_minutes: int = Form(15, ge=1, le=15),
     token: str = Form(""),
 ):
     required = os.environ.get("APP_PASSWORD")
@@ -196,9 +176,6 @@ async def assess(
     sample = sample.strip()
     if not file and not url and not sample:
         raise HTTPException(status_code=400, detail="Provide a file, a link, or pick a sample.")
-    if llm_backend not in LLM_BACKENDS:
-        raise HTTPException(status_code=400, detail=f"Unknown LLM backend {llm_backend!r}.")
-
     source, saved = None, None
     display_name = None
     if file:
@@ -231,9 +208,7 @@ async def assess(
     job = {"status": "queued", "messages": ["Assessment queued"], "report": None, "error": None}
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = job
-    background_tasks.add_task(_run, job, source, saved, whisper_model, use_frames == "true",
-                              llm_backend, max_minutes, api_key.strip() or None, display_name,
-                              speaker_diarization)
+    background_tasks.add_task(_run, job, source, saved, max_minutes, display_name)
     return {"job": jid}
 
 

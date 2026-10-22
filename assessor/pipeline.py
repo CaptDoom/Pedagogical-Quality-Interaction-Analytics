@@ -31,18 +31,14 @@ def analyze(path: str, whisper_model: str = "medium", use_frames: bool = True, l
 
         say("Extracting audio")
         wav = os.path.join(tmp, "audio.wav")
-        denoised_wav = os.path.join(tmp, "audio_denoised.wav")
-        extract_audio(path, wav, max_minutes, denoised_dst=denoised_wav)
+        extract_audio(path, wav, max_minutes, denoise=True)
         import gc
         import soundfile as sf
         y, sr = sf.read(wav, dtype="float32")
-        clean_y, clean_sr = sf.read(denoised_wav, dtype="float32")
-        if clean_sr != sr:
-            raise RuntimeError(f"Audio sample-rate mismatch after noise reduction ({sr} Hz vs {clean_sr} Hz).")
         gc.collect()
 
         say("Transcribing locally")
-        segs, lang = transcribe(clean_y, whisper_model, device, progress=say)
+        segs, lang = transcribe(y, whisper_model, device, progress=say)
         gc.collect()
         if not segs:
             raise RuntimeError(
@@ -52,7 +48,7 @@ def analyze(path: str, whisper_model: str = "medium", use_frames: bool = True, l
 
         if use_diarization:
             say("Separating teacher and student voices")
-            segs, dia = assign_speakers(segs, clean_y, sr, progress=say)
+            segs, dia = assign_speakers(segs, y, sr, progress=say)
             if dia.get("error"):
                 notes.append("Speaker separation was unavailable; participation estimates may be unreliable.")
         else:
@@ -65,7 +61,7 @@ def analyze(path: str, whisper_model: str = "medium", use_frames: bool = True, l
             frames, step = sample_frames(path, 10.0, 150, max_minutes * 60)
 
         say("Measuring speech activity, interaction, delivery and screen signals")
-        feats = compute_features(segs, y, sr, frames, step, dia["confident"], vad_audio=clean_y)
+        feats = compute_features(segs, y, sr, frames, step, dia["confident"], vad_audio=y)
 
         llm_out = None
         if llm_backend not in (None, "", "none") and segs:
