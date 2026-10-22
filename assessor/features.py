@@ -72,6 +72,58 @@ def _voice_activity_intervals(y: np.ndarray, sr: int) -> list[tuple[float, float
             for start, end in merged if end - start >= min_frames]
 
 
+def _yin_pitch(y: np.ndarray, sr: int, fmin: float = 65, fmax: float = 500,
+               frame_length: int = 2048) -> np.ndarray:
+    """Estimate voiced fundamental frequencies with YIN, using NumPy only."""
+    audio = np.asarray(y, dtype=np.float64)
+    if sr <= 0 or fmin <= 0 or fmax <= fmin:
+        return np.empty(0, dtype=np.float64)
+    frame_length = max(frame_length, 2 * int(np.ceil(sr / fmin)) + 2)
+    min_lag = max(2, int(sr / fmax))
+    max_lag = min(int(sr / fmin), frame_length // 2 - 1)
+    if len(audio) < frame_length or max_lag <= min_lag:
+        return np.empty(0, dtype=np.float64)
+
+    hop_length = frame_length // 4
+    frames = np.lib.stride_tricks.sliding_window_view(audio, frame_length)[::hop_length]
+    window = np.hanning(frame_length)
+    frames = (frames - np.mean(frames, axis=1, keepdims=True)) * window
+
+    fft_length = 1 << (2 * frame_length - 1).bit_length()
+    spectrum = np.fft.rfft(frames, n=fft_length, axis=1)
+    autocorrelation = np.fft.irfft(spectrum * np.conjugate(spectrum), n=fft_length, axis=1)
+    autocorrelation = autocorrelation[:, :frame_length]
+    cumulative_energy = np.cumsum(frames * frames, axis=1)
+    lags = np.arange(1, max_lag + 1)
+    left_energy = cumulative_energy[:, frame_length - 1 - lags]
+    right_energy = cumulative_energy[:, -1, None] - cumulative_energy[:, lags - 1]
+    difference = np.maximum(left_energy + right_energy - 2 * autocorrelation[:, lags], 0)
+    cumulative_difference = np.cumsum(difference, axis=1)
+    normalized_difference = difference * lags / np.maximum(cumulative_difference, 1e-12)
+
+    pitches = np.zeros(len(frames), dtype=np.float64)
+    for index, row in enumerate(normalized_difference):
+        if cumulative_energy[index, -1] < 1e-8:
+            continue
+        candidates = np.flatnonzero(row[min_lag - 1:max_lag] < 0.15)
+        if len(candidates):
+            lag = min_lag + int(candidates[0])
+            while lag < max_lag and row[lag] < row[lag - 1]:
+                lag += 1
+        else:
+            lag = min_lag + int(np.argmin(row[min_lag - 1:max_lag]))
+
+        offset = 0.0
+        center = lag - 1
+        if 0 < center < len(row) - 1:
+            left, middle, right = row[center - 1:center + 2]
+            denominator = left - 2 * middle + right
+            if abs(denominator) > 1e-12:
+                offset = float(np.clip(0.5 * (left - right) / denominator, -1, 1))
+        pitches[index] = sr / (lag + offset)
+    return pitches
+
+
 # ---------------------------------------------------------------- speakers
 @lru_cache(maxsize=1)
 def _speaker_encoder():
@@ -105,7 +157,6 @@ def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int,
         info["error"] = "SpeechBrain ECAPA model unavailable while Hugging Face offline mode is enabled."
         return segments, info
     try:
-        import librosa
         import torch
         from sklearn.cluster import AgglomerativeClustering
         from sklearn.metrics import silhouette_score
@@ -119,7 +170,7 @@ def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int,
             clip = y[a:b]
             if len(clip) < int(0.65 * sr):
                 continue
-            pitch = librosa.yin(clip, fmin=65, fmax=500, sr=sr)
+            pitch = _yin_pitch(clip, sr)
             median_pitch = float(np.median(pitch)) if len(pitch) else 0.0
             clips.append((index, np.asarray(clip, dtype=np.float32), median_pitch, s.end - s.start))
         if len(clips) < 6:
@@ -228,11 +279,6 @@ def _audio_features(y: np.ndarray, sr: int, segs: list[Segment]) -> dict:
         if run * hop_s >= 1.5 and run * hop_s - hop_s < 1.5:
             drops += 1
     f["audio_dropouts"] = drops
-    try:
-        import librosa
-    except ImportError:
-        f["pitch_estimation_available"] = False
-        return f
     f["pitch_estimation_available"] = True
     # teacher pitch / intonation range (semitones, p90-p10) on a sample of teacher segments
     teacher = [s for s in segs if s.speaker == "teacher" and s.end - s.start > 1.0]
@@ -243,7 +289,7 @@ def _audio_features(y: np.ndarray, sr: int, segs: list[Segment]) -> dict:
         clip = y[int(s.start * sr):int(min(s.end, s.start + 6) * sr)]
         if len(clip) < 2048:
             continue
-        f0 = librosa.yin(clip, fmin=65, fmax=500, sr=sr, frame_length=1024)
+        f0 = _yin_pitch(clip, sr, frame_length=1024)
         f0 = f0[np.isfinite(f0) & (f0 >= 65) & (f0 <= 500)]
         if len(f0):
             pitch_values.append(f0)
@@ -256,15 +302,11 @@ def _audio_features(y: np.ndarray, sr: int, segs: list[Segment]) -> dict:
 
 
 def _is_rising_pitch(y: np.ndarray, sr: int, segment: Segment) -> bool:
-    try:
-        import librosa
-    except ImportError:
-        return False
     end = int(segment.end * sr)
     clip = y[max(0, end - sr):end]
     if len(clip) < int(0.4 * sr):
         return False
-    f0 = librosa.yin(clip, fmin=65, fmax=500, sr=sr)
+    f0 = _yin_pitch(clip, sr)
     if len(f0) < 8:
         return False
     split = len(f0) // 2

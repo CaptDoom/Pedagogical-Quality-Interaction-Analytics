@@ -2,7 +2,7 @@
 import numpy as np
 
 from calibrate import _monotonicity, fit_dimension_weights, fit_thresholds
-from assessor.features import apply_interaction_tags, assign_speakers, compute_features
+from assessor.features import _is_rising_pitch, _yin_pitch, apply_interaction_tags, assign_speakers, compute_features
 from assessor.scoring import assess
 from assessor.types import Segment
 
@@ -69,6 +69,23 @@ def test_silence_uses_audio_activity_not_asr_boundaries():
 
     assert features["dead_air_s"] >= 9.0
     assert features["dead_air_ratio"] >= 0.4
+
+
+def test_yin_pitch_estimates_voiced_tone_without_librosa():
+    t = np.arange(SR, dtype=np.float32) / SR
+    tone = np.sin(2 * np.pi * 220 * t)
+
+    pitches = _yin_pitch(tone, SR, frame_length=1024)
+
+    assert len(pitches) > 0
+    assert abs(float(np.median(pitches)) - 220) < 5
+
+
+def test_rising_pitch_detection_uses_numpy_estimator():
+    t = np.arange(2 * SR, dtype=np.float32) / SR
+    rising_tone = np.sin(2 * np.pi * (180 * t + 25 * t * t))
+
+    assert _is_rising_pitch(rising_tone, SR, Segment(0, 2, "statement"))
 
 
 def test_low_confidence_transcript_does_not_drive_lexical_cues():
