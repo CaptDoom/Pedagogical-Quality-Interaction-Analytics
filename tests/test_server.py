@@ -1,5 +1,4 @@
 """HTTP route and request validation coverage for the FastAPI service."""
-import time
 
 from fastapi.testclient import TestClient
 
@@ -73,24 +72,29 @@ def test_report_routes_enforce_configured_password(monkeypatch):
 def test_assessment_job_lifecycle(monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     analysis_args = []
+    background_tasks = []
 
     def fake_analyze(*args, **kwargs):
         analysis_args.extend(args)
         return {"label": "Good", "score": 3.8, "features": {}, "dimensions": [], "observations": []}
 
+    def capture_background_task(self, func, *args, **kwargs):
+        background_tasks.append((func, args, kwargs))
+
     monkeypatch.setattr(server, "analyze", fake_analyze)
+    monkeypatch.setattr(server.BackgroundTasks, "add_task", capture_background_task)
     response = client.post(
         "/assess", data={"llm_backend": "none"}, files={"file": ("lesson.wav", b"test-audio", "audio/wav")}
     )
     assert response.status_code == 200
     job_id = response.json()["job"]
+    assert analysis_args == []
+    assert len(background_tasks) == 1
+    assert client.get(f"/jobs/{job_id}").json()["status"] == "queued"
 
-    job = None
-    for _ in range(100):
-        job = client.get(f"/jobs/{job_id}").json()
-        if job["status"] in {"done", "error"}:
-            break
-        time.sleep(0.01)
+    func, args, kwargs = background_tasks[0]
+    func(*args, **kwargs)
+    job = client.get(f"/jobs/{job_id}").json()
 
     assert job["status"] == "done", job
     assert analysis_args[1] == "base"

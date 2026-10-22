@@ -93,7 +93,7 @@ The UI also accepts a per-request provider key and, when configured, the applica
 | `GET` | `/jobs/{id}` | Poll job state, progress messages, and report |
 | `GET` | `/api/media?path=...` | Stream a project-local media asset |
 
-`POST /assess` accepts multipart form fields such as `file`, `url`, `sample`, `whisper_model`, `use_frames`, `max_minutes`, `llm_backend`, `api_key`, and `token`. Assessment jobs are held in process memory; restarting the service clears jobs and the latest report.
+`POST /assess` accepts multipart form fields such as `file`, `url`, `sample`, `whisper_model`, `use_frames`, `max_minutes`, `llm_backend`, `api_key`, and `token`. It returns a job ID before analysis starts; poll `GET /jobs/{id}` for progress. FastAPI runs analysis as a post-response background task. Jobs are held in process memory; restarting the service clears jobs and the latest report.
 
 ## Test
 

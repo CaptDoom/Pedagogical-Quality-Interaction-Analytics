@@ -44,4 +44,4 @@ RUN chmod 755 /usr/local/bin/classlens-entrypoint
 ENTRYPOINT ["/usr/local/bin/classlens-entrypoint"]
 
 EXPOSE 10000
-CMD ["python", "server.py"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "10000"]

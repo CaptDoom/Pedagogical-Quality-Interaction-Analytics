@@ -19,7 +19,7 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from assessor.env import load_env
@@ -171,6 +171,7 @@ def stream_media(path: str):
 
 @app.post("/assess")
 async def assess(
+    background_tasks: BackgroundTasks,
     file: UploadFile | None = File(None),
     url: str = Form(""),
     sample: str = Form(""),
@@ -224,9 +225,9 @@ async def assess(
     job = {"status": "queued", "messages": ["Assessment queued"], "report": None, "error": None}
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = job
-    threading.Thread(target=_run, args=(job, source, saved, whisper_model, use_frames == "true",
-                                        llm_backend, max_minutes, api_key.strip() or None, display_name,
-                                        speaker_diarization), daemon=True).start()
+    background_tasks.add_task(_run, job, source, saved, whisper_model, use_frames == "true",
+                              llm_backend, max_minutes, api_key.strip() or None, display_name,
+                              speaker_diarization)
     return {"job": jid}
 
 
