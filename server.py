@@ -35,8 +35,9 @@ WEB_PAGE = ROOT_DIR / "web" / "index.html"
 WEB_DIR = ROOT_DIR / "web"
 WHISPER_MODELS = {"tiny", "base", "small", "medium"}
 LLM_BACKENDS = {"none", "gemini", "google", "openai-compatible", "ollama", "anthropic"}
-DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
-DEFAULT_LLM_BACKEND = os.environ.get("DEFAULT_LLM_BACKEND", "gemini")
+DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "base")
+DEFAULT_LLM_BACKEND = os.environ.get("DEFAULT_LLM_BACKEND", "none")
+DEFAULT_SPEAKER_DIARIZATION = os.environ.get("SPEAKER_DIARIZATION", "false").lower() in {"1", "true", "yes"}
 if DEFAULT_WHISPER_MODEL not in WHISPER_MODELS:
     raise RuntimeError(f"Unsupported WHISPER_MODEL {DEFAULT_WHISPER_MODEL!r}.")
 if DEFAULT_LLM_BACKEND not in LLM_BACKENDS:
@@ -67,14 +68,15 @@ def _require_password(x_app_password: str = Header(default="")) -> None:
 
 def _run(job: dict, source: str, saved_path: str | None, model: str, use_frames: bool,
          llm_backend: str, max_minutes: int, api_key: str | None = None,
-         display_name: str | None = None) -> None:
+         display_name: str | None = None, use_diarization: bool = False) -> None:
     global LATEST_REPORT
     tmpdir = saved_path and os.path.dirname(saved_path)
     try:
         job["status"] = "running"
         with _LOCK:
             report = analyze(source, model, use_frames, llm_backend, max_minutes,
-                             progress=lambda m: job["messages"].append(m), api_key=api_key)
+                             progress=lambda m: job["messages"].append(m), api_key=api_key,
+                             use_diarization=use_diarization)
         report["file_name"] = display_name or os.path.basename(source)
         try:
             src_p = Path(source).resolve()
@@ -102,7 +104,11 @@ def health_check():
 
 @app.get("/api/config")
 def public_config():
-    return {"whisper_model": DEFAULT_WHISPER_MODEL, "llm_backend": DEFAULT_LLM_BACKEND}
+    return {
+        "whisper_model": DEFAULT_WHISPER_MODEL,
+        "llm_backend": DEFAULT_LLM_BACKEND,
+        "speaker_diarization": DEFAULT_SPEAKER_DIARIZATION,
+    }
 
 
 @app.get("/")
@@ -170,8 +176,9 @@ async def assess(
     sample: str = Form(""),
     whisper_model: str = Form(DEFAULT_WHISPER_MODEL),
     use_frames: str = Form("false"),
-    max_minutes: int = Form(30, ge=1, le=120),
+    max_minutes: int = Form(15, ge=1, le=120),
     llm_backend: str = Form(DEFAULT_LLM_BACKEND),
+    speaker_diarization: bool = Form(DEFAULT_SPEAKER_DIARIZATION),
     api_key: str = Form(""),
     token: str = Form(""),
 ):
@@ -218,7 +225,8 @@ async def assess(
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = job
     threading.Thread(target=_run, args=(job, source, saved, whisper_model, use_frames == "true",
-                                        llm_backend, max_minutes, api_key.strip() or None, display_name), daemon=True).start()
+                                        llm_backend, max_minutes, api_key.strip() or None, display_name,
+                                        speaker_diarization), daemon=True).start()
     return {"job": jid}
 
 

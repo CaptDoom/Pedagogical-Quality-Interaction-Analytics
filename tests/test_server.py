@@ -14,7 +14,9 @@ def test_read_routes_respond(monkeypatch):
     assert client.get("/").status_code == 200
     assert client.get("/health").json()["status"] == "ok"
     assert client.get("/api/health").json()["app"] == "ClassLens"
-    assert client.get("/api/config").json() == {"whisper_model": "small", "llm_backend": "gemini"}
+    assert client.get("/api/config").json() == {
+        "whisper_model": "base", "llm_backend": "none", "speaker_diarization": False
+    }
     assert client.get("/static/styles.css").status_code == 200
     assert client.get("/favicon.ico").status_code == 204
     samples = client.get("/api/samples").json()
@@ -91,8 +93,8 @@ def test_assessment_job_lifecycle(monkeypatch):
         time.sleep(0.01)
 
     assert job["status"] == "done", job
-    assert analysis_args[1] == "small"
+    assert analysis_args[1] == "base"
     assert analysis_args[2] is False
-    assert analysis_args[4] == 30
+    assert analysis_args[4] == 15
     assert job["report"]["file_name"] == "lesson.wav"
     assert client.get("/api/latest").json()["label"] == "Good"

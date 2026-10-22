@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from functools import lru_cache
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -84,9 +85,10 @@ def _speaker_encoder():
         device = "cuda" if torch.cuda.is_available() else "cpu"
     except ImportError:
         device = "cpu"
+    cache_dir = Path(os.environ.get("CLASSLENS_MODEL_CACHE", Path.home() / ".cache" / "classlens"))
     return EncoderClassifier.from_hparams(
         source="speechbrain/spkrec-ecapa-voxceleb",
-        savedir=os.path.join(os.path.expanduser("~"), ".cache", "classlens", "spkrec-ecapa-voxceleb"),
+        savedir=str(cache_dir / "spkrec-ecapa-voxceleb"),
         run_opts={"device": device},
     )
 

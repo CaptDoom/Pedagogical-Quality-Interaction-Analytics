@@ -234,3 +234,30 @@ def test_pipeline_rejects_recordings_without_detected_speech(tmp_path, monkeypat
 
     with pytest.raises(RuntimeError, match="No speech was detected"):
         pl.analyze(str(src), "tiny", False, "none")
+
+
+def test_pipeline_skips_speaker_model_when_diarization_disabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(pl, "has_ffmpeg", lambda: True)
+    src = tmp_path / "input.mp4"
+    src.write_bytes(b"test media")
+
+    def fake_extract(path, dst, max_minutes=None, denoised_dst=None):
+        import soundfile as sf
+
+        audio = np.sin(2 * np.pi * 220 * np.arange(5 * SR) / SR).astype(np.float32) * 0.1
+        sf.write(dst, audio, SR)
+        if denoised_dst:
+            sf.write(denoised_dst, audio, SR)
+
+    segments = [Segment(0, 2, "What do you see?", "teacher"), Segment(2.5, 4, "I see a cat.", "teacher")]
+    monkeypatch.setattr(pl, "extract_audio", fake_extract)
+    monkeypatch.setattr(pl, "ingest", lambda path, outdir: (
+        path, {"duration": 5.0, "has_audio": True, "has_video": False, "format": "test"}))
+    monkeypatch.setattr(pl, "transcribe", lambda *args, **kwargs: (segments, "en"))
+    monkeypatch.setattr(pl, "assign_speakers", lambda *args, **kwargs: pytest.fail("diarization should be skipped"))
+
+    report = pl.analyze(str(src), "tiny", False, "none", 5, use_diarization=False)
+
+    assert report["diarization"]["method"] == "disabled"
+    assert report["diarization"]["confident"] is False
+    assert any("Speaker separation was disabled" in note for note in report["notes"])

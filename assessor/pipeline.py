@@ -15,7 +15,7 @@ from .types import fmt
 
 def analyze(path: str, whisper_model: str = "medium", use_frames: bool = True, llm_backend: str = "none",
             max_minutes: float = 60, progress: Callable[[str], None] | None = None, device: str | None = None,
-            api_key: str | None = None) -> dict:
+            api_key: str | None = None, use_diarization: bool = True) -> dict:
     """Full pipeline: audio -> transcript -> speakers -> features -> rubric (+ optional LLM) -> report.
     All intermediate files live in a temp dir that is deleted afterwards."""
     say = progress or (lambda m: None)
@@ -50,10 +50,14 @@ def analyze(path: str, whisper_model: str = "medium", use_frames: bool = True, l
                 "increase the analysis duration, or try another Whisper model."
             )
 
-        say("Separating teacher and student voices")
-        segs, dia = assign_speakers(segs, clean_y, sr, progress=say)
-        if dia.get("error"):
-            notes.append("Speaker separation was unavailable; participation estimates may be unreliable.")
+        if use_diarization:
+            say("Separating teacher and student voices")
+            segs, dia = assign_speakers(segs, clean_y, sr, progress=say)
+            if dia.get("error"):
+                notes.append("Speaker separation was unavailable; participation estimates may be unreliable.")
+        else:
+            dia = {"method": "disabled", "confident": False, "silhouette": None, "speakers": 1}
+            notes.append("Speaker separation was disabled for faster analysis; participation estimates are unavailable.")
 
         frames, step = ([], 10.0)
         if use_frames and info.get("has_video", False):
