@@ -16,6 +16,8 @@ services:
         value: 0.0.0.0
       - key: WHISPER_MODEL
         value: tiny
+      - key: CLASSLENS_DEFAULT_WHISPER_MODEL
+        value: tiny
       - key: DEFAULT_LLM_BACKEND
         value: none
       - key: SPEAKER_DIARIZATION

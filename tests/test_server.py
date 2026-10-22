@@ -8,6 +8,13 @@ import server
 client = TestClient(server.app)
 
 
+def test_classlens_whisper_default_overrides_legacy_setting(monkeypatch):
+    monkeypatch.setenv("WHISPER_MODEL", "base")
+    monkeypatch.setenv("CLASSLENS_DEFAULT_WHISPER_MODEL", "tiny")
+
+    assert server._configured_whisper_model() == "tiny"
+
+
 def test_read_routes_respond(monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     assert client.get("/").status_code == 200

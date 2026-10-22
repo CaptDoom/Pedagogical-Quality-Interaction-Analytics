@@ -3,6 +3,7 @@ FROM python:3.12-slim
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HOST=0.0.0.0 \
+    CLASSLENS_DEFAULT_WHISPER_MODEL=tiny \
     WHISPER_MODEL=tiny \
     HF_HOME=/var/data/huggingface \
     CLASSLENS_MODEL_CACHE=/var/data/classlens

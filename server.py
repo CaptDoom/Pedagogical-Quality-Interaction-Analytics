@@ -35,7 +35,13 @@ WEB_PAGE = ROOT_DIR / "web" / "index.html"
 WEB_DIR = ROOT_DIR / "web"
 WHISPER_MODELS = {"tiny", "base", "small", "medium"}
 LLM_BACKENDS = {"none", "gemini", "google", "openai-compatible", "ollama", "anthropic"}
-DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "base")
+
+
+def _configured_whisper_model() -> str:
+    return os.environ.get("CLASSLENS_DEFAULT_WHISPER_MODEL", os.environ.get("WHISPER_MODEL", "base"))
+
+
+DEFAULT_WHISPER_MODEL = _configured_whisper_model()
 DEFAULT_LLM_BACKEND = os.environ.get("DEFAULT_LLM_BACKEND", "none")
 DEFAULT_SPEAKER_DIARIZATION = os.environ.get("SPEAKER_DIARIZATION", "false").lower() in {"1", "true", "yes"}
 if DEFAULT_WHISPER_MODEL not in WHISPER_MODELS:
