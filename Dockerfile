@@ -4,6 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HOST=0.0.0.0 \
     WHISPER_MODEL=base \
+    NUMBA_CACHE_DIR=/tmp/numba_cache \
     HF_HOME=/var/data/huggingface \
     CLASSLENS_MODEL_CACHE=/var/data/classlens
 
@@ -38,8 +39,9 @@ COPY web ./web
 COPY server.py config.json ./
 
 RUN useradd --create-home --shell /usr/sbin/nologin classlens \
-    && mkdir -p /home/classlens/.cache /var/data /tmp/classlens_uploads \
-    && chown -R classlens:classlens /app /home/classlens /var/data /tmp/classlens_uploads
+    && mkdir -p /home/classlens/.cache /var/data /tmp/classlens_uploads "$NUMBA_CACHE_DIR" \
+    && chown -R classlens:classlens /app /home/classlens /var/data /tmp/classlens_uploads "$NUMBA_CACHE_DIR" \
+    && su -s /bin/sh classlens -c 'python -c "import librosa, numpy as np; librosa.yin(np.zeros(22050, dtype=np.float32), fmin=65, fmax=500, sr=22050); print(\"librosa YIN smoke test passed\")"'
 COPY docker-entrypoint.sh /usr/local/bin/classlens-entrypoint
 RUN chmod 755 /usr/local/bin/classlens-entrypoint
 ENTRYPOINT ["/usr/local/bin/classlens-entrypoint"]
