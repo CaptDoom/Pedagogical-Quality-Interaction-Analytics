@@ -108,11 +108,10 @@ def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int,
         from sklearn.cluster import AgglomerativeClustering
         from sklearn.metrics import silhouette_score
 
-        if progress:
-            progress("Loading local ECAPA speaker model; first use may download model weights")
         clips: list[tuple[int, np.ndarray, float, float]] = []
-        encoder = _speaker_encoder()
-        for index, s in enumerate(segments):
+        selected_indices = np.linspace(0, len(segments) - 1, min(120, len(segments))).astype(int)
+        for index in selected_indices:
+            s = segments[index]
             a = int(s.start * sr)
             b = int(min(s.end, s.start + 8) * sr)
             clip = y[a:b]
@@ -121,6 +120,13 @@ def assign_speakers(segments: list[Segment], y: np.ndarray, sr: int,
             pitch = librosa.yin(clip, fmin=65, fmax=500, sr=sr)
             median_pitch = float(np.median(pitch)) if len(pitch) else 0.0
             clips.append((index, np.asarray(clip, dtype=np.float32), median_pitch, s.end - s.start))
+        if len(clips) < 6:
+            info["speakers"] = 1
+            return segments, info
+
+        if progress:
+            progress(f"Loading local ECAPA speaker model for {len(clips)} sampled turns")
+        encoder = _speaker_encoder()
         valid: list[tuple[int, np.ndarray, float, float]] = []
         for offset in range(0, len(clips), 16):
             batch = clips[offset:offset + 16]
@@ -228,7 +234,7 @@ def _audio_features(y: np.ndarray, sr: int, segs: list[Segment]) -> dict:
     f["pitch_estimation_available"] = True
     # teacher pitch / intonation range (semitones, p90-p10) on a sample of teacher segments
     teacher = [s for s in segs if s.speaker == "teacher" and s.end - s.start > 1.0]
-    indices = np.linspace(0, len(teacher) - 1, min(40, len(teacher))).astype(int) if teacher else []
+    indices = np.linspace(0, len(teacher) - 1, min(20, len(teacher))).astype(int) if teacher else []
     pitch_values, semitones = [], []
     for index in indices:
         s = teacher[index]
@@ -341,8 +347,8 @@ def compute_features(segs: list[Segment], y: np.ndarray, sr: int, frames=None, f
     reliable_teacher = [(i, s) for i, s in enumerate(segs)
                         if s.speaker == "teacher" and _confidence_weight(s) >= 0.35]
     pitch_candidates = [(i, s) for i, s in reliable_teacher if "?" not in s.text]
-    if len(pitch_candidates) > 60:
-        selected = np.linspace(0, len(pitch_candidates) - 1, 60).astype(int)
+    if len(pitch_candidates) > 20:
+        selected = np.linspace(0, len(pitch_candidates) - 1, 20).astype(int)
         pitch_candidates = [pitch_candidates[index] for index in selected]
     rising_indices = {i for i, segment in pitch_candidates if _is_rising_pitch(y, sr, segment)}
     for i, s in reliable_teacher:

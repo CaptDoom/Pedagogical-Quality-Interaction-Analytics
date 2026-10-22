@@ -169,7 +169,7 @@ async def assess(
     url: str = Form(""),
     sample: str = Form(""),
     whisper_model: str = Form(DEFAULT_WHISPER_MODEL),
-    use_frames: str = Form("true"),
+    use_frames: str = Form("false"),
     max_minutes: int = Form(30, ge=1, le=120),
     llm_backend: str = Form(DEFAULT_LLM_BACKEND),
     api_key: str = Form(""),

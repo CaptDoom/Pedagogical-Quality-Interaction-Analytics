@@ -92,6 +92,7 @@ def test_assessment_job_lifecycle(monkeypatch):
 
     assert job["status"] == "done", job
     assert analysis_args[1] == "small"
+    assert analysis_args[2] is False
     assert analysis_args[4] == 30
     assert job["report"]["file_name"] == "lesson.wav"
     assert client.get("/api/latest").json()["label"] == "Good"
