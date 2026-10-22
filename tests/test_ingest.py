@@ -4,7 +4,7 @@ import shutil
 import numpy as np
 import pytest
 
-from assessor.media import ingest, probe
+from assessor.media import extract_audio, ingest, probe
 
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
                                   reason="ffmpeg/ffprobe not on PATH")
@@ -48,3 +48,21 @@ def test_ingest_non_media_fails_clearly(tmp_path):
     bogus.write_bytes(b"this is not a video " * 100)
     with pytest.raises(RuntimeError, match="not a media file"):
         ingest(str(bogus), str(tmp_path))
+
+
+@needs_ffmpeg
+def test_extract_audio_creates_raw_and_denoised_tracks(tmp_path):
+    source = tmp_path / "lesson.wav"
+    raw = tmp_path / "raw.wav"
+    clean = tmp_path / "clean.wav"
+    _write_wav(source)
+
+    extract_audio(str(source), str(raw), denoised_dst=str(clean))
+
+    import soundfile as sf
+
+    raw_audio, raw_sr = sf.read(raw)
+    clean_audio, clean_sr = sf.read(clean)
+    assert raw_sr == clean_sr == 16000
+    assert len(raw_audio) == len(clean_audio)
+    assert np.any(clean_audio)

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: classlens
+    runtime: docker
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: WHISPER_MODEL
+        value: small
+      - key: DEFAULT_LLM_BACKEND
+        value: none
+      - key: APP_PASSWORD
+        generateValue: true

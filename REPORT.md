@@ -42,9 +42,9 @@ The repository ignores `.env`, local virtual environments, downloaded tools, cac
 
 ## Known limitations
 
-- Calibration currently reflects a very small labeled dataset and should not be generalized as a validated accuracy claim.
-- Timbre-based speaker clustering is an estimate, not robust diarization.
+- Calibration uses a small labeled dataset with no Poor example; its Poor cutoff is untested, and its LOO metrics should not be generalized as a validated accuracy claim.
+- Local ECAPA speaker embeddings with pitch-assisted clustering improve speaker estimates, but this is not robust diarization and can fail with short turns, overlapping speech, or several similar voices.
 - Transcription and timestamps can be inaccurate, especially for young voices, noisy recordings, accents, and overlapping speech.
-- Wait-time measurement is limited by transcription segment boundaries.
+- Audio activity estimates wait time and long silences independently from ASR segment boundaries, but remains an approximation rather than human-verified speech detection.
 - Screen analysis measures visual changes rather than the pedagogical value of the content.
 - The development server is loopback-bound by default; production use requires appropriate authentication, TLS, access control, retention rules, and security/privacy review.

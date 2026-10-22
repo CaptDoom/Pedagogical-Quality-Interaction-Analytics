@@ -31,7 +31,7 @@ Audio transcription and measured feature extraction are local by default. Upload
 
 ## Scope and limitations
 
-ClassLens produces approximate signals from noisy, incomplete inputs. Timbre-based speaker separation is not robust diarization, transcription may be inaccurate, wait-time measurement has known limitations, visual change is not a measure of instructional value, and rubric calibration is currently based on a very small labeled set. Scores should be treated as prompts for human review rather than definitive judgments or employment/disciplinary evidence.
+ClassLens produces approximate signals from noisy, incomplete inputs. Local speaker embeddings and pitch cues can still misassign overlapping or similar voices; transcription may be inaccurate; and audio activity is an estimate of speech and silence, not a human-verified annotation. Screen change/OCR are not measures of instructional value. The available labeled recordings contain no Poor example, so the Poor cutoff remains untested; scores and leave-one-recording-out results from this small, imbalanced set do not establish general accuracy. Treat results as prompts for human review rather than definitive judgments or employment/disciplinary evidence.
 
 ## Repository and documentation
 

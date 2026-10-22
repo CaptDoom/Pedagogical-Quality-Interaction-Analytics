@@ -1,0 +1,11 @@
+.env*
+.git
+.venv
+.cache
+.pytest_cache
+__pycache__
+.tools
+samples
+tests
+*.py[cod]
+calibration.csv

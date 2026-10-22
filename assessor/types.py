@@ -9,6 +9,7 @@ class Segment:
     end: float
     text: str
     speaker: str = "teacher"  # "teacher" | "student"
+    confidence: float | None = None
 
 
 def fmt(t: float) -> str:

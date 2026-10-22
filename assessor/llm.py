@@ -16,18 +16,26 @@ SYSTEM = (
     "You are an expert reviewer of online classes for children. You judge teaching quality from a transcript "
     "(T = teacher, S = student; speaker labels may be imperfect) and measured metrics. Be specific: every point "
     "must cite a timestamp [mm:ss] and a short verbatim quote (under 15 words) from the transcript. "
-    "Never invent quotes. Do not judge on length or volume alone. Return ONLY JSON."
+    "Ignore transcript stretches with confidence below 0.4. Tag teacher questions and praise in any language, "
+    "but only when explicitly present in the transcript; never translate or invent a quote. "
+    "Do not judge on length or volume alone. Return ONLY JSON."
 )
 
 SCHEMA = (
     '{"clarity": 1-5, "rapport": 1-5, "content_accuracy": 1-5, "summary": "2 sentences", '
     '"strengths": [{"timestamp": "mm:ss", "observation": "...", "quote": "..."}], '
-    '"weaknesses": [{"timestamp": "mm:ss", "observation": "...", "quote": "..."}]}'
+    '"weaknesses": [{"timestamp": "mm:ss", "observation": "...", "quote": "..."}], '
+    '"interaction_tags": {"questions": [{"timestamp": "mm:ss", "quote": "..."}], '
+    '"praise": [{"timestamp": "mm:ss", "quote": "..."}]}}'
 )
 
 
 def render_transcript(segs: list[Segment], budget: int = 14000, block: int = 12) -> str:
-    lines = [f"[{fmt(s.start)}] {'T' if s.speaker == 'teacher' else 'S'}: {s.text}" for s in segs]
+    lines = [
+        f"[{fmt(s.start)}] {'T' if s.speaker == 'teacher' else 'S'}"
+        f"{f' (confidence {s.confidence:.2f})' if s.confidence is not None else ''}: {s.text}"
+        for s in segs
+    ]
     if sum(len(l) + 1 for l in lines) <= budget:
         return "\n".join(lines)
     blocks = [lines[i:i + block] for i in range(0, len(lines), block)]

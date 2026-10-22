@@ -9,8 +9,12 @@ import server
 client = TestClient(server.app)
 
 
-def test_read_routes_respond():
+def test_read_routes_respond(monkeypatch):
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
     assert client.get("/").status_code == 200
+    assert client.get("/health").json()["status"] == "ok"
+    assert client.get("/api/health").json()["app"] == "ClassLens"
+    assert client.get("/api/config").json() == {"whisper_model": "medium", "llm_backend": "gemini"}
     samples = client.get("/api/samples").json()
     assert isinstance(samples, list)
     assert all({"name", "rel_path", "size_mb", "ext"} <= sample.keys() for sample in samples)
@@ -48,6 +52,18 @@ def test_assess_enforces_configured_password(monkeypatch):
     response = client.post("/assess", data={"url": "https://example.invalid/lesson.mp4", "token": "wrong"})
     assert response.status_code == 401
     assert response.json()["detail"] == "Wrong or missing password."
+
+
+def test_report_routes_enforce_configured_password(monkeypatch):
+    monkeypatch.setenv("APP_PASSWORD", "test-password")
+    monkeypatch.setattr(server, "LATEST_REPORT", {"label": "Good"})
+    monkeypatch.setitem(server.JOBS, "protected", {"status": "done"})
+
+    assert client.get("/api/latest").status_code == 401
+    assert client.get("/jobs/protected").status_code == 401
+    headers = {"X-App-Password": "test-password"}
+    assert client.get("/api/latest", headers=headers).json() == {"label": "Good"}
+    assert client.get("/jobs/protected", headers=headers).json()["status"] == "done"
 
 
 def test_assessment_job_lifecycle(monkeypatch):

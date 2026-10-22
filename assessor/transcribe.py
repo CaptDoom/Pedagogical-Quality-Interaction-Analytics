@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import math
 import os
 from functools import lru_cache
 from typing import Callable
+
+import numpy as np
 
 from .types import Segment, fmt
 
@@ -41,6 +44,16 @@ def transcribe(audio: str | np.ndarray, model_size: str = "base", device: str | 
         dev, compute = "cpu", "int8"
         model = _model(model_size, dev, compute)
 
+    if language is None and isinstance(audio, np.ndarray) and len(audio):
+        probe_audio = audio[: 15 * 16000]
+        probe_gen, probe_info = model.transcribe(
+            probe_audio, language=None, vad_filter=True, beam_size=1, best_of=1,
+            condition_on_previous_text=False,
+        )
+        next(probe_gen, None)
+        if getattr(probe_info, "language_probability", 0.0) >= 0.8:
+            language = probe_info.language
+
     segs_gen, info = model.transcribe(
         audio,
         language=language,
@@ -49,6 +62,7 @@ def transcribe(audio: str | np.ndarray, model_size: str = "base", device: str | 
         beam_size=1,
         best_of=1,
         condition_on_previous_text=False,
+        word_timestamps=True,
     )
 
     total_dur = getattr(info, "duration", 0.0) or (len(audio) / 16000 if hasattr(audio, "__len__") else 0.0)
@@ -57,8 +71,37 @@ def transcribe(audio: str | np.ndarray, model_size: str = "base", device: str | 
 
     for s in segs_gen:
         txt = s.text.strip()
-        if txt:
-            out.append(Segment(s.start, s.end, txt))
+        words = getattr(s, "words", None) or []
+        if txt and words:
+            phrase: list = []
+            phrase_start = phrase_end = 0.0
+            phrase_confidence: list[float] = []
+
+            def flush_phrase() -> None:
+                if not phrase:
+                    return
+                phrase_text = "".join(getattr(w, "word", "") for w in phrase).strip()
+                confidence = sum(phrase_confidence) / len(phrase_confidence) if phrase_confidence else None
+                if phrase_text:
+                    out.append(Segment(phrase_start, phrase_end, phrase_text, confidence=confidence))
+                phrase.clear()
+                phrase_confidence.clear()
+
+            for word in words:
+                if phrase and word.start - phrase_end > 0.5:
+                    flush_phrase()
+                if not phrase:
+                    phrase_start = word.start
+                phrase.append(word)
+                phrase_end = word.end
+                probability = getattr(word, "probability", None)
+                if probability is not None:
+                    phrase_confidence.append(float(probability))
+            flush_phrase()
+        elif txt:
+            confidence = getattr(s, "avg_logprob", None)
+            confidence = float(math.exp(min(0.0, confidence))) if confidence is not None else None
+            out.append(Segment(s.start, s.end, txt, confidence=confidence))
         if progress and total_dur > 0 and (s.end - last_update >= 20.0 or s.end >= total_dur - 1):
             last_update = s.end
             pct = min(99, int((s.end / total_dur) * 100))

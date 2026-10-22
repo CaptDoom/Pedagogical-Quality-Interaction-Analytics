@@ -179,7 +179,7 @@ tailwind.config = { darkMode: "class", theme: { extend: {
       <div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 space-y-3 text-xs">
         <div class="font-bold text-on-surface border-b border-outline-variant pb-2">Pipeline Settings</div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label class="block font-semibold mb-1">Whisper Speech Model</label><select id="cfgModel" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="base" selected>Base (Recommended: Fast & Accurate)</option><option value="small">Small (High Precision)</option><option value="tiny">Tiny (Fastest)</option><option value="medium">Medium (Accurate)</option></select></div>
+          <div><label class="block font-semibold mb-1">Whisper Speech Model</label><select id="cfgModel" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="medium" selected>Medium (Recommended: More accurate, slower)</option><option value="base">Base (Faster)</option><option value="small">Small (Balanced)</option><option value="tiny">Tiny (Fastest)</option></select></div>
           <div><label class="block font-semibold mb-1">Max Duration (Minutes)</label><input id="cfgMaxMinutes" type="number" value="60" min="5" max="120" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"/></div>
           <div class="sm:col-span-2"><label class="flex items-center gap-2 cursor-pointer"><input id="cfgFrames" type="checkbox" checked class="rounded border-outline text-primary focus:ring-primary"/><span>Extract visual frames for slide transitions & screen change detection</span></label></div>
           <div><label class="block font-semibold mb-1">AI Review Engine</label><select id="cfgLlm" class="w-full bg-surface border border-outline-variant rounded p-1.5 text-xs text-on-surface focus:border-primary"><option value="gemini" selected>Google Gemini (Recommended)</option><option value="openai-compatible">OpenAI (gpt-4o-mini)</option><option value="ollama">Local Ollama</option><option value="none">None (Deterministic only)</option></select></div>
@@ -203,13 +203,28 @@ tailwind.config = { darkMode: "class", theme: { extend: {
 let currentFile = null, stagedUrl = null, stagedSample = null, pollTimer = null, currentReport = null, signalsTableVisible = false;
 window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('printDate').textContent = new Date().toLocaleDateString();
+  document.getElementById('cfgToken').value = sessionStorage.getItem('appPassword') || '';
   loadPreloadedSamples(); setupMediaPlayer();
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeIngestModal(); });
   try {
-    const res = await fetch('/api/latest'); const data = await res.json();
+    const configResponse = await fetch('/api/config');
+    if (!configResponse.ok) throw new Error(`Application config returned HTTP ${configResponse.status}`);
+    const config = await configResponse.json();
+    document.getElementById('cfgModel').value = config.whisper_model;
+    document.getElementById('cfgLlm').value = config.llm_backend;
+    const res = await fetch('/api/latest', { headers: appPasswordHeaders() });
+    if (!res.ok) throw new Error(`Latest report returned HTTP ${res.status}`);
+    const data = await res.json();
     if (data && data.score) renderDashboard(data); else showEmptyState();
-  } catch { showEmptyState(); }
+  } catch (error) {
+    console.error('Could not load application defaults:', error);
+    showEmptyState();
+  }
 });
+function appPasswordHeaders() {
+  const token = sessionStorage.getItem('appPassword') || document.getElementById('cfgToken').value;
+  return token ? { 'X-App-Password': token } : {};
+}
 function showToast(msg) {
   const t = document.getElementById('toast'); document.getElementById('toastMsg').textContent = msg;
   t.classList.remove('translate-y-[-100px]', 'opacity-0'); setTimeout(() => t.classList.add('translate-y-[-100px]', 'opacity-0'), 2600);
@@ -295,7 +310,12 @@ async function startAnalysis() {
   const uk = document.getElementById('cfgApiKey').value.trim();
   if (uk) fd.append('api_key', uk);
   const token = document.getElementById('cfgToken').value;
-  if (token) fd.append('token', token);
+  if (token) {
+    fd.append('token', token);
+    sessionStorage.setItem('appPassword', token);
+  } else {
+    sessionStorage.removeItem('appPassword');
+  }
   progWrap.classList.remove('hidden'); logs.innerHTML = '<div class="text-primary font-semibold">Starting pipeline...</div>';
   startBtn.disabled = true; document.getElementById('startBtnLabel').textContent = "Analyzing...";
   try {
@@ -311,7 +331,7 @@ function pollJob(jid) {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
     try {
-      const res = await fetch('/jobs/' + jid);
+      const res = await fetch('/jobs/' + jid, { headers: appPasswordHeaders() });
       if (!res.ok) return;
       const job = await res.json();
       const logs = document.getElementById('modalLiveLogs');
@@ -338,7 +358,10 @@ function renderDashboard(r) {
   document.getElementById('sessionFileName').textContent = r.file_name || 'Classroom Session';
   document.getElementById('sessionDuration').textContent = ((f.duration_s || 0) / 60).toFixed(1) + ' min duration';
   document.getElementById('sessionLanguage').textContent = 'Language: ' + (r.language || 'en');
-  document.getElementById('sessionDiarization').textContent = f.diarization_confident ? 'Speakers: Teacher & Student Identified' : 'Speakers: Combined / Single Speaker';
+  const dia = r.diarization || {};
+  document.getElementById('sessionDiarization').textContent = f.diarization_confident
+    ? `Speakers: ${dia.speakers || 2} voice groups identified`
+    : 'Speakers: Combined / Single Speaker';
   const pCard = document.getElementById('playerCard'), player = document.getElementById('mediaPlayer');
   if (r.media_url) { player.src = r.media_url; pCard.classList.remove('hidden'); } else { pCard.classList.add('hidden'); player.src = ''; }
   document.getElementById('heroScore').textContent = r.score.toFixed(2);
@@ -393,6 +416,7 @@ function renderTranscriptRows(items) {
     <div id="turn-${i}" class="p-2 rounded bg-surface border border-outline-variant/60 flex items-start gap-3 transcript-item transition-all hover:border-primary cursor-pointer" data-speaker="${esc(t.speaker || '')}" data-start="${t.start || 0}" onclick="seekToTime(${t.start || 0}, ${i})">
       <span class="px-1.5 py-0.5 rounded bg-surface-container-high font-label text-[10px] text-primary shrink-0">${esc(t.t || '00:00')}</span>
       <span class="px-2 py-0.5 rounded text-[10px] font-label font-bold uppercase shrink-0 ${t.speaker === 'teacher' ? 'bg-primary/20 text-primary border border-primary/40' : 'bg-secondary/20 text-secondary border border-secondary/40'}">${esc(t.speaker || 'SPEAKER')}</span>
+      ${Number.isFinite(t.confidence) ? `<span class="font-label text-[10px] shrink-0 ${t.confidence < 0.4 ? 'text-error' : 'text-outline'}" title="Whisper segment confidence">${Math.round(t.confidence * 100)}% ASR</span>` : ''}
       <p class="text-xs text-on-surface flex-1">${esc(t.text || '')}</p>
     </div>`).join('');
 }

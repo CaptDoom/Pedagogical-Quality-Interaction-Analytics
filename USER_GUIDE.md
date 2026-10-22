@@ -71,10 +71,11 @@ Interactive API documentation is available at `http://127.0.0.1:8000/api`. `POST
 
 ## 7. Known limitations
 
-- Rubric calibration currently uses only a small labeled sample set; performance on other classes is not established.
-- Voice clustering is an estimate and can confuse similar voices, overlapping speech, or groups of children.
+- Rubric calibration uses a small, imbalanced labeled sample set and has no labeled Poor recording; the Poor cutoff is untested and performance on other classes is not established.
+- Local speaker embeddings and pitch are still estimates and can confuse similar voices, overlapping speech, or groups of children; check the report's diarization confidence.
 - Transcript text and timestamps can be wrong. Review the recording before relying on quoted evidence.
-- Wait-time and response timing are limited by the transcription segment boundaries.
-- Signal lexicons are mainly English and can miss culturally or linguistically different expressions.
+- Word-level transcription confidence is exposed in the transcript and low-confidence text contributes less to lexical metrics. Audio activity, rather than ASR segment edges, is used for silence and wait-time estimates; neither is a human-verified annotation.
+- Signal lexicons are mainly English. Optional, approved LLM review can tag verbatim praise and questions in other languages, but may still miss or misclassify them.
 - Screen-change analysis describes visual variation, not educational effectiveness.
+- Optional OCR requires a local Tesseract executable and analyzes sampled frames locally; OCR output is not sent to external services.
 - External LLM feedback can be incomplete or incorrect; it is optional and should be treated as a suggestion.

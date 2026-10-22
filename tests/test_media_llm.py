@@ -16,6 +16,7 @@ import pytest
 from assessor import pipeline as pl
 from assessor.llm import run as llm_run
 from assessor.media import download
+from assessor.transcribe import transcribe
 from assessor.types import Segment
 
 SR = 16000
@@ -98,12 +99,14 @@ def test_pipeline_degrades_when_llm_fails(tmp_path, monkeypatch):
     src = tmp_path / "input.mp4"
     src.write_bytes(b"not-really-a-video")
 
-    def fake_extract(path, dst, max_minutes=None):
+    def fake_extract(path, dst, max_minutes=None, denoised_dst=None):
         t = np.arange(int(14 * SR)) / SR
         y = 0.1 * np.sin(2 * np.pi * 220 * t) * (1 + 0.3 * np.sin(2 * np.pi * 0.8 * t))
         import soundfile as sf
 
         sf.write(dst, y.astype(np.float32), SR)
+        if denoised_dst:
+            sf.write(denoised_dst, y.astype(np.float32), SR)
 
     segs = [Segment(0.0, 4.0, "Great job class! What do plants need in order to grow?", "teacher"),
             Segment(5.0, 8.0, "Plants need water and sunlight to grow", "student"),
@@ -144,3 +147,32 @@ def test_gemini_backend_routing(monkeypatch):
     assert res["clarity"] == 4
     assert res["content_accuracy"] == 5
 
+
+def test_transcribe_pins_stable_language_and_splits_word_pauses(monkeypatch):
+    from types import SimpleNamespace
+
+    calls = []
+
+    class FakeModel:
+        def transcribe(self, audio, language=None, **kwargs):
+            calls.append((language, kwargs))
+            info = SimpleNamespace(language="ml", language_probability=0.95, duration=3.0)
+            words = [
+                SimpleNamespace(start=0.0, end=0.3, word=" Hello", probability=0.9),
+                SimpleNamespace(start=0.35, end=0.7, word=" there", probability=0.8),
+                SimpleNamespace(start=1.4, end=1.8, word=" friend", probability=0.7),
+            ]
+            segment = SimpleNamespace(start=0.0, end=1.8, text=" Hello there friend", words=words)
+            return iter([segment]), info
+
+    monkeypatch.setattr("assessor.transcribe._model", lambda *args: FakeModel())
+
+    segments, language = transcribe(np.zeros(3 * SR, dtype=np.float32), "tiny")
+
+    assert language == "ml"
+    assert calls[0][0] is None
+    assert calls[1][0] == "ml"
+    assert calls[1][1]["word_timestamps"] is True
+    assert [segment.text for segment in segments] == ["Hello there", "friend"]
+    assert segments[0].confidence == pytest.approx(0.85)
+    assert segments[1].confidence == pytest.approx(0.7)

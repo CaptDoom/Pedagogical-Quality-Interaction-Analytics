@@ -19,7 +19,7 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from assessor.env import load_env
@@ -32,6 +32,14 @@ app = FastAPI(title="ClassLens", docs_url="/api")
 
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_PAGE = ROOT_DIR / "web" / "index.html"
+WHISPER_MODELS = {"tiny", "base", "small", "medium"}
+LLM_BACKENDS = {"none", "gemini", "google", "openai-compatible", "ollama", "anthropic"}
+DEFAULT_WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
+DEFAULT_LLM_BACKEND = os.environ.get("DEFAULT_LLM_BACKEND", "gemini")
+if DEFAULT_WHISPER_MODEL not in WHISPER_MODELS:
+    raise RuntimeError(f"Unsupported WHISPER_MODEL {DEFAULT_WHISPER_MODEL!r}.")
+if DEFAULT_LLM_BACKEND not in LLM_BACKENDS:
+    raise RuntimeError(f"Unsupported DEFAULT_LLM_BACKEND {DEFAULT_LLM_BACKEND!r}.")
 JOBS: dict[str, dict] = {}
 LATEST_REPORT: dict | None = None
 _LOCK = threading.Lock()  # one analysis at a time: whisper already saturates the CPU
@@ -48,6 +56,12 @@ def _is_within_root(path: Path) -> bool:
 
 def _serialize(report: dict) -> dict:
     return json.loads(json.dumps(report, default=float))
+
+
+def _require_password(x_app_password: str = Header(default="")) -> None:
+    required = os.environ.get("APP_PASSWORD")
+    if required and x_app_password != required:
+        raise HTTPException(status_code=401, detail="Wrong or missing password.")
 
 
 def _run(job: dict, source: str, saved_path: str | None, model: str, use_frames: bool,
@@ -79,6 +93,17 @@ def _run(job: dict, source: str, saved_path: str | None, model: str, use_frames:
             shutil.rmtree(tmpdir, ignore_errors=True)  # uploaded copies always die with the run
 
 
+@app.get("/health")
+@app.get("/api/health")
+def health_check():
+    return JSONResponse({"status": "ok", "app": "ClassLens", "version": "1.0.0"})
+
+
+@app.get("/api/config")
+def public_config():
+    return {"whisper_model": DEFAULT_WHISPER_MODEL, "llm_backend": DEFAULT_LLM_BACKEND}
+
+
 @app.get("/")
 def index():
     return FileResponse(WEB_PAGE, media_type="text/html")
@@ -106,7 +131,7 @@ def list_samples():
 
 
 @app.get("/api/latest")
-def get_latest():
+def get_latest(_: None = Depends(_require_password)):
     """Return latest analyzed report if available."""
     if LATEST_REPORT:
         return JSONResponse(LATEST_REPORT)
@@ -132,10 +157,10 @@ async def assess(
     file: UploadFile | None = File(None),
     url: str = Form(""),
     sample: str = Form(""),
-    whisper_model: str = Form("base"),
+    whisper_model: str = Form(DEFAULT_WHISPER_MODEL),
     use_frames: str = Form("true"),
     max_minutes: int = Form(60, ge=1, le=120),
-    llm_backend: str = Form("gemini"),
+    llm_backend: str = Form(DEFAULT_LLM_BACKEND),
     api_key: str = Form(""),
     token: str = Form(""),
 ):
@@ -146,7 +171,7 @@ async def assess(
     sample = sample.strip()
     if not file and not url and not sample:
         raise HTTPException(status_code=400, detail="Provide a file, a link, or pick a sample.")
-    if llm_backend not in ("none", "gemini", "google", "openai-compatible", "ollama", "anthropic"):
+    if llm_backend not in LLM_BACKENDS:
         raise HTTPException(status_code=400, detail=f"Unknown LLM backend {llm_backend!r}.")
 
     source, saved = None, None
@@ -187,7 +212,7 @@ async def assess(
 
 
 @app.get("/jobs/{job_id}")
-def job_status(job_id: str):
+def job_status(job_id: str, _: None = Depends(_require_password)):
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Unknown job.")
@@ -197,4 +222,6 @@ def job_status(job_id: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", 8000)))
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host=host, port=port)

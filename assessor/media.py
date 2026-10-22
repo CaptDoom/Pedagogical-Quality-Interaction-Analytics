@@ -12,10 +12,11 @@ from pathlib import Path
 
 import numpy as np
 
-# Fall back to bundled ffmpeg if present in .tools/ffmpeg/bin
-_bundled_ffmpeg = Path(__file__).resolve().parent.parent / ".tools" / "ffmpeg" / "bin"
-if _bundled_ffmpeg.is_dir() and str(_bundled_ffmpeg) not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = str(_bundled_ffmpeg) + os.pathsep + os.environ.get("PATH", "")
+# Fall back to bundled ffmpeg if present in .tools/ffmpeg/bin or bin/
+_base_dir = Path(__file__).resolve().parent.parent
+for _cand_bin in [_base_dir / ".tools" / "ffmpeg" / "bin", _base_dir / "bin"]:
+    if _cand_bin.is_dir() and str(_cand_bin) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = str(_cand_bin) + os.pathsep + os.environ.get("PATH", "")
 
 MEDIA_EXT = {".mp4", ".mkv", ".mov", ".webm", ".m4a", ".mp3", ".wav", ".aac", ".ogg", ".flv", ".wmv", ".avi", ".ts"}
 # ffprobe format_name -> sensible file extension (for links that ship without one)
@@ -174,13 +175,19 @@ def _looks_direct(url: str) -> bool:
     return any(path.endswith(e) for e in MEDIA_EXT)
 
 
-def extract_audio(src: str, dst: str, max_minutes: float | None = None) -> None:
+def extract_audio(src: str, dst: str, max_minutes: float | None = None,
+                  denoised_dst: str | None = None) -> None:
     cmd = ["ffmpeg", "-y", "-i", src, "-map", "0:a:0?", "-vn", "-ac", "1", "-ar", "16000"]
     if max_minutes:
         cmd += ["-t", str(int(max_minutes * 60))]
     cmd.append(dst)
+    if denoised_dst:
+        cmd += ["-map", "0:a:0?", "-vn", "-af", "highpass=f=70,afftdn=nf=-25", "-ac", "1", "-ar", "16000"]
+        if max_minutes:
+            cmd += ["-t", str(int(max_minutes * 60))]
+        cmd.append(denoised_dst)
     r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0 or not os.path.exists(dst):
+    if r.returncode != 0 or not os.path.exists(dst) or (denoised_dst and not os.path.exists(denoised_dst)):
         raise RuntimeError("ffmpeg could not read audio from this file:\n" + r.stderr[-600:])
 
 
@@ -209,7 +216,7 @@ def sample_frames(src: str, step_s: float = 10.0, max_frames: int = 150, max_sec
         ok, fr = cap.read()
         if not ok:
             break
-        g = cv2.cvtColor(cv2.resize(fr, (160, 90)), cv2.COLOR_BGR2GRAY)
+        g = cv2.cvtColor(cv2.resize(fr, (320, 180)), cv2.COLOR_BGR2GRAY)
         out.append((t, g.astype(np.float32)))
         t += step
     cap.release()

@@ -13,11 +13,11 @@ DEFAULT_CONFIG = {
     "weights": {
         "Student participation": 0.22,
         "Questioning": 0.14,
-        "Responsiveness": 0.10,
+        "Responsiveness": 0.05,
         "Delivery & pacing": 0.14,
         "Warmth & feedback": 0.12,
         "Flow & technical quality": 0.10,
-        "Screen & visuals": 0.08,
+        "Screen & visuals": 0.02,
         "Clarity of explanation": 0.10,
         "Rapport with child": 0.10,
         "Content accuracy": 0.10,
@@ -96,6 +96,9 @@ def d_questioning(f, ev):
     obs.append(_obs(dim, "+" if f["questions_per_min"] >= 0.6 else "-",
                     f"{f['questions']} teacher questions (~{f['questions_per_min']:.1f}/min); "
                     f"{f['open_question_share']*100:.0f}% were open-ended (what/why/how)."))
+    for item in ev.get("llm_questions", [])[:2]:
+        timestamp = f"At {item['timestamp']}: " if item.get("timestamp") else ""
+        obs.append(_obs(dim, "+", f"{timestamp}LLM identified a teacher question: \"{item['quote']}\".", "LLM"))
     ans = [q for q in qs if q[2] == "answered"]
     una = [q for q in qs if q[2] != "answered"]
     if f["teacher_answers_own_question_share"] > 0.3 and una:
@@ -160,7 +163,10 @@ def d_warmth(f, ev):
     score = 0.7 * praise + 0.3 * corr
     if f["praise_per_min"] >= 0.5:
         ex = ev.get("praise", [])
+        tagged = ev.get("llm_praise", [])
         extra = f" e.g. at {fmt(ex[0][0])}: \"{ex[0][1][:80]}\"" if ex else ""
+        if tagged:
+            extra = f" e.g. at {tagged[0]['timestamp']}: \"{tagged[0]['quote']}\"" if tagged[0].get("timestamp") else f" e.g. \"{tagged[0]['quote']}\""
         obs.append(_obs(dim, "+", f"Regular encouragement ({f['praise_per_min']:.1f} praise phrases/min){extra}."))
     elif f["praise_per_min"] < 0.15:
         obs.append(_obs(dim, "-", "Very little verbal encouragement or positive reinforcement for the child."))
@@ -208,6 +214,9 @@ def d_visual(f, ev):
         obs.append(_obs(dim, "+", f"Visuals change about {f['screen_changes_per_min']:.1f} times per minute, keeping attention."))
     elif f["screen_changes_per_min"] < 0.4:
         obs.append(_obs(dim, "-", f"Screen content rarely changed ({f['screen_changes_per_min']:.1f} changes/min)."))
+    if f.get("screen_ocr_available"):
+        obs.append(_obs(dim, "+", f"Local OCR found about {f['screen_text_words_per_frame']:.1f} visible text words per sampled frame; "
+                                  f"text changed in {f['screen_text_change_ratio']*100:.0f}% of sample transitions."))
     return score, obs
 
 
